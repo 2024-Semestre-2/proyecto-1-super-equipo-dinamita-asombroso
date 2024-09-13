@@ -1,5 +1,6 @@
 package itcr.controllers;
 
+import itcr.graphics.FileExplorer;
 import itcr.graphics.MyPcConfig;
 import itcr.models.MemoryManager;
 
@@ -13,15 +14,38 @@ public class DesktopScreenController {
   public DesktopScreenController(JFrame parent) {
     this.parent = parent;
     this.memoryManager = new MemoryManager();
+    this.loadInitialFilesInMemory();
+  }
+
+  public void loadInitialFilesInMemory() {
+    String[] fileNames = { "file1.txt", "file2.txt"};
+    String[] fileContent = { "Contenido del archivo 1", "Contenido del archivo 2" };
+
+    boolean allFilesStored = false;
+
+    for (int i = 0; i < fileNames.length; i++) {
+      allFilesStored = memoryManager.storeFile(fileNames[i], fileContent[i]);
+    }
+
+    if (!allFilesStored) {
+      JOptionPane.showMessageDialog(null, "No se pudieron cargar todos los archivos en memoria");
+    }
   }
 
   public void openMyComputer() {
-    MyPcConfig myPcConfig = new MyPcConfig(parent, this);
+    MyPcConfigController myPcConfigController = new MyPcConfigController(this, memoryManager);
+    MyPcConfig myPcConfig = new MyPcConfig(parent, myPcConfigController);
     myPcConfig.setVisible(true);
   }
 
   public void openRecycleBin() {
     JOptionPane.showMessageDialog(null, "Abriendo Papelera de Reciclaje");
+  }
+
+  public void openFileExplorer() {
+    FileExplorerController fileExplorerController = new FileExplorerController(memoryManager);
+    FileExplorer fileExplorer = new FileExplorer(parent, fileExplorerController);
+    fileExplorer.setVisible(true);
   }
 
   public void loadConfigurationFromFile(String configFilePath, String fileType) {
@@ -70,11 +94,11 @@ public class DesktopScreenController {
   }
 
   public int getSecondaryMemorySize() {
-    return memoryManager.getSecondaryStorageSize();
+    return memoryManager.getSecondaryMemorySize();
   }
 
   public void setSecondaryMemorySize(int secondaryMemorySize) {
-    memoryManager.setSecondaryStorageSize(secondaryMemorySize);
+    memoryManager.setSecondaryMemorySize(secondaryMemorySize);
   }
 
   public int getVirtualMemorySize() {

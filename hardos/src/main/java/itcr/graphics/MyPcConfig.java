@@ -1,12 +1,12 @@
 package itcr.graphics;
 
-import itcr.controllers.DesktopScreenController;
+import itcr.controllers.MyPcConfigController;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 
-public class MyPcConfig extends FloatingWindow {
+public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
   private JTextField kernelSizeField;
   private JTextField osSizeField;
   private JTextField mainMemorySizeField;
@@ -14,7 +14,7 @@ public class MyPcConfig extends FloatingWindow {
   private JTextField virtualMemorySizeField;
   private JButton loadConfigButton;
 
-  public MyPcConfig(JFrame parent, DesktopScreenController controller) {
+  public MyPcConfig(JFrame parent, MyPcConfigController controller) {
     super(parent, "Configuración de Mi PC", controller);
   }
 
@@ -41,7 +41,6 @@ public class MyPcConfig extends FloatingWindow {
     mainPanel.add(new JLabel("Tamaño de Memoria Virtual:"));
     virtualMemorySizeField = new JTextField(String.valueOf(controller.getVirtualMemorySize()));
     mainPanel.add(virtualMemorySizeField);
-
 
     JButton saveButton = new JButton("Guardar");
     saveButton.addActionListener(e -> saveChanges());
@@ -87,8 +86,12 @@ public class MyPcConfig extends FloatingWindow {
       String filePath = selectedFile.getAbsolutePath();
       String fileType = getFileType(selectedFile);
 
-      controller.loadConfigurationFromFile(filePath, fileType);
-      updateFields();
+      try {
+        controller.loadConfigurationFromFile(filePath, fileType);
+        updateFields();
+      } catch (RuntimeException e) {
+        JOptionPane.showMessageDialog(this, e.getMessage());
+      }
     }
   }
 
@@ -105,5 +108,7 @@ public class MyPcConfig extends FloatingWindow {
     kernelSizeField.setText(String.valueOf(controller.getKernelSize()));
     osSizeField.setText(String.valueOf(controller.getOsSize()));
     mainMemorySizeField.setText(String.valueOf(controller.getMainMemorySize()));
+    secondaryMemorySizeField.setText(String.valueOf(controller.getSecondaryMemorySize()));
+    virtualMemorySizeField.setText(String.valueOf(controller.getVirtualMemorySize()));
   }
 }

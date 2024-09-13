@@ -30,7 +30,7 @@ public class MemoryManager {
 
   private int mainMemorySize;
   private int virtualMemorySize;
-  private int secondaryStorageSize;
+  private int secondaryMemorySize;
 
   private String[] virtualMemory;
   private byte[] mainMemory;
@@ -42,24 +42,35 @@ public class MemoryManager {
 
   private int kernelSize;
   private int osSize;
+  private int userSpaceSize;
 
   public MemoryManager() {
     mainMemorySize = DEFAULT_MAIN_MEMORY_SIZE;
     virtualMemorySize = DEFAULT_VIRTUAL_MEMORY_SIZE;
-    secondaryStorageSize = DEFAULT_SECONDARY_STORAGE_SIZE;
+    secondaryMemorySize = DEFAULT_SECONDARY_STORAGE_SIZE;
     initializeMemory();
   }
 
   public MemoryManager(int mainMemorySize, int secondaryMemorySize) {
     this.mainMemorySize = mainMemorySize;
-    this.secondaryStorageSize = secondaryMemorySize;
+    this.secondaryMemorySize = secondaryMemorySize;
     this.virtualMemorySize = DEFAULT_VIRTUAL_MEMORY_SIZE;
+    initializeMemory();
+  }
+
+  public MemoryManager(int mainMemorySize, int secondaryMemorySize, int kernelSize, int osSize) {
+    this.mainMemorySize = mainMemorySize;
+    this.secondaryMemorySize = secondaryMemorySize;
+    this.virtualMemorySize = DEFAULT_VIRTUAL_MEMORY_SIZE;
+    this.kernelSize = kernelSize;
+    this.osSize = osSize;
+    this.userSpaceSize = mainMemorySize - kernelSize - osSize;
     initializeMemory();
   }
 
   private void initializeMemory() {
     this.mainMemory = new byte[mainMemorySize * KB];
-    this.secondaryStorage = new byte[secondaryStorageSize * KB];
+    this.secondaryStorage = new byte[secondaryMemorySize * KB];
     virtualMemory = new String[virtualMemorySize * KB];
 
     this.mainMemoryIndex = new HashMap<>();
@@ -73,18 +84,40 @@ public class MemoryManager {
       System.out.println("All stored instructions for process " + processName + ":");
       for (int i = 0; i < allocations.size(); i++) {
         String instruction = getInstruction(processName, i);
-        System.out.println(i + ": " + instruction);
+        String instructionAddress = String.format("%04X", allocations.get(i).startIndex);
+        String instructionSize = String.format("%04d", allocations.get(i).size);
+        String instructionAddressDecimal = String.format("%04d", allocations.get(i).startIndex);
+        System.out.println("Instruction " + i + ": " + instruction + " | Address: " + instructionAddress + " | Size: "
+            + instructionSize + " | Decimal Address: " + instructionAddressDecimal);
       }
     } else {
       System.out.println("No instructions stored for process " + processName);
     }
   }
 
+  public void printFirstTenKernelBytes() {
+    System.out.println("First ten kernel bytes:");
+    for (int i = 0; i < 10; i++) {
+      System.out.print(mainMemory[i] + " ");
+    }
+    System.out.println();
+  }
+
+  public void printFirstTenOSBytes() {
+    int osSpaceStart = kernelSize * KB;
+    int osSpaceEnd = osSpaceStart + 100;
+    
+    for (int i = osSpaceStart; i < osSpaceEnd; i++) {
+      System.out.print(mainMemory[i] + " ");
+    }
+    System.out.println();
+  }
+
   // Main memory management methods
 
   public boolean storeInstruction(String processName, String instruction) {
     byte[] instructionBytes = instruction.getBytes();
-    MemoryAllocation allocation = allocateMainMemory(instructionBytes.length);
+    MemoryAllocation allocation = allocateUserSpace(instructionBytes.length);
     if (allocation != null) {
       System.arraycopy(instructionBytes, 0, mainMemory, allocation.startIndex, instructionBytes.length);
       processInstructions.computeIfAbsent(processName, k -> new ArrayList<>()).add(allocation);
@@ -94,21 +127,19 @@ public class MemoryManager {
   }
 
   public boolean storeNumber(String processName, int number) {
-    MemoryAllocation allocation = allocateMainMemory(Integer.BYTES);
+    MemoryAllocation allocation = allocateUserSpace(Integer.BYTES);
     if (allocation != null) {
       ByteBuffer.wrap(mainMemory, allocation.startIndex, Integer.BYTES).putInt(number);
       String key = processName + "_number";
       mainMemoryIndex.put(key, allocation);
-      System.out.println("Stored number " + number + " with key: " + key);
       return true;
     }
-    System.out.println("Failed to allocate memory for number: " + number);
     return false;
   }
 
   public boolean storeBCP(String processName, String bcpString) {
     byte[] bcpBytes = bcpString.getBytes();
-    MemoryAllocation allocation = allocateMainMemory(bcpBytes.length);
+    MemoryAllocation allocation = allocateOSSpace(bcpBytes.length);
     if (allocation != null) {
       System.arraycopy(bcpBytes, 0, mainMemory, allocation.startIndex, bcpBytes.length);
       mainMemoryIndex.put(processName + "_bcp", allocation);
@@ -119,19 +150,12 @@ public class MemoryManager {
 
   public String getInstruction(String processName, int index) {
     List<MemoryAllocation> allocations = processInstructions.get(processName);
-
     if (allocations != null && index >= 0 && index < allocations.size()) {
       MemoryAllocation allocation = allocations.get(index);
-
-      // Retrieve instruction bytes from main memory
       byte[] instructionBytes = new byte[allocation.size];
-      for (int i = 0; i < allocation.size; i++) {
-        instructionBytes[i] = mainMemory[allocation.startIndex + i];
-      }
-
+      System.arraycopy(mainMemory, allocation.startIndex, instructionBytes, 0, allocation.size);
       return new String(instructionBytes);
     }
-
     return null;
   }
 
@@ -139,11 +163,8 @@ public class MemoryManager {
     String key = processName + "_number";
     MemoryAllocation allocation = mainMemoryIndex.get(key);
     if (allocation != null) {
-      int value = ByteBuffer.wrap(mainMemory, allocation.startIndex, Integer.BYTES).getInt();
-      System.out.println("Retrieved number " + value + " with key: " + key);
-      return value;
+      return ByteBuffer.wrap(mainMemory, allocation.startIndex, Integer.BYTES).getInt();
     }
-    System.out.println("Failed to retrieve number with key: " + key);
     return null;
   }
 
@@ -187,13 +208,41 @@ public class MemoryManager {
     }
   }
 
+  public List<FileInfo> getFileList() {
+    List<FileInfo> fileList = new ArrayList<>();
+    for (Map.Entry<String, FileInfo> entry : secondaryStorageIndex.entrySet()) {
+      String fileName = entry.getKey();
+      FileInfo fileInfo = entry.getValue();
+      fileList.add(new FileInfo(fileName, fileInfo.size)); // in bytes
+    }
+    return fileList;
+  }
+
   // Auxiliary methods for memory management
 
-  private MemoryAllocation allocateMainMemory(int size) {
-    for (int i = 0; i < mainMemory.length; i++) {
+  private MemoryAllocation allocateUserSpace(int size) {
+    int userSpaceStart = (kernelSize + osSize) * KB;
+    for (int i = userSpaceStart; i < mainMemory.length; i++) {
       if (mainMemory[i] == 0) {
         int j = i;
         while (j < i + size && j < mainMemory.length && mainMemory[j] == 0) {
+          j++;
+        }
+        if (j - i == size) {
+          return new MemoryAllocation(i, size);
+        }
+      }
+    }
+    return null;
+  }
+
+  private MemoryAllocation allocateOSSpace(int size) {
+    int osSpaceStart = kernelSize * KB;
+    int osSpaceEnd = osSpaceStart + osSize * KB;
+    for (int i = osSpaceStart; i < osSpaceEnd; i++) {
+      if (mainMemory[i] == 0) {
+        int j = i;
+        while (j < i + size && j < osSpaceEnd && mainMemory[j] == 0) {
           j++;
         }
         if (j - i == size) {
@@ -267,8 +316,8 @@ public class MemoryManager {
               virtualMemorySize = value;
               updatedValues++;
               break;
-            case "secondaryStorageSize":
-              secondaryStorageSize = value;
+            case "secondaryMemorySize":
+              secondaryMemorySize = value;
               updatedValues++;
               break;
             case "kernelSize":
@@ -303,7 +352,7 @@ public class MemoryManager {
 
       mainMemorySize = ((Long) jsonConfig.get("mainMemorySize")).intValue();
       virtualMemorySize = ((Long) jsonConfig.get("virtualMemorySize")).intValue();
-      secondaryStorageSize = ((Long) jsonConfig.get("secondaryStorageSize")).intValue();
+      secondaryMemorySize = ((Long) jsonConfig.get("secondaryMemorySize")).intValue();
       kernelSize = ((Long) jsonConfig.get("kernelSize")).intValue();
       osSize = ((Long) jsonConfig.get("osSize")).intValue();
 
@@ -329,7 +378,7 @@ public class MemoryManager {
 
       mainMemorySize = Integer.parseInt(getTagValue("mainMemorySize", configElement));
       virtualMemorySize = Integer.parseInt(getTagValue("virtualMemorySize", configElement));
-      secondaryStorageSize = Integer.parseInt(getTagValue("secondaryStorageSize", configElement));
+      secondaryMemorySize = Integer.parseInt(getTagValue("secondaryMemorySize", configElement));
       kernelSize = Integer.parseInt(getTagValue("kernelSize", configElement));
       osSize = Integer.parseInt(getTagValue("osSize", configElement));
 
@@ -359,8 +408,8 @@ public class MemoryManager {
     return virtualMemorySize;
   }
 
-  public int getSecondaryStorageSize() {
-    return secondaryStorageSize;
+  public int getSecondaryMemorySize() {
+    return secondaryMemorySize;
   }
 
   public int getKernelSize() {
@@ -379,8 +428,8 @@ public class MemoryManager {
     this.virtualMemorySize = virtualMemorySize;
   }
 
-  public void setSecondaryStorageSize(int secondaryStorageSize) {
-    this.secondaryStorageSize = secondaryStorageSize;
+  public void setSecondaryMemorySize(int secondaryMemorySize) {
+    this.secondaryMemorySize = secondaryMemorySize;
   }
 
   public void setKernelSize(int kernelSize) {

@@ -1,13 +1,16 @@
 package itcr.execution;
 
+import java.util.List;
+
 import itcr.models.MemoryManager;
+import itcr.models.FileInfo;
 
 public class MemoryManagementTest {
 
   private MemoryManager memoryManager;
 
   public void setUp() {
-    memoryManager = new MemoryManager(64, 128);
+    memoryManager = new MemoryManager(2000, 500, 20, 100);
   }
 
   public void testStoreAndRetrieveInstruction() {
@@ -51,7 +54,7 @@ public class MemoryManagementTest {
 
   public void testStoreAndRetrieveFile() {
     String fileName = "test.txt";
-    String fileContent = "Este es un archivo de prueba.";
+    String fileContent = "xd";
 
     boolean stored = memoryManager.storeFile(fileName, fileContent);
     String retrievedFile = memoryManager.getFile(fileName);
@@ -92,11 +95,17 @@ public class MemoryManagementTest {
 
     System.out.println("\nAll instructions after storing:");
     memoryManager.printAllInstructions(processName);
+
+    System.out.println("\nFirst ten kernel bytes:");
+    memoryManager.printFirstTenKernelBytes();
+
+    System.out.println("\nFirst ten OS bytes:");
+    memoryManager.printFirstTenOSBytes();
   }
 
   public void testFileOperations() {
-    String fileName = "test.asm";
-    String fileContent = "section .text\n    global _start\n_start:\n    mov eax, 1\n    int 0x80";
+    String fileName = "newFile.asm";
+    String fileContent = "file";
 
     boolean stored = memoryManager.storeFile(fileName, fileContent);
     String retrievedFile = memoryManager.getFile(fileName);
@@ -104,26 +113,44 @@ public class MemoryManagementTest {
     System.out.println("\nTest File Operations:");
     System.out.println("Stored: " + stored);
     System.out.println("Retrieved: " + retrievedFile);
+    System.out.println("Test Passed: " + (stored && fileContent.trim().equals(retrievedFile)));
 
     memoryManager.freeFile(fileName);
     retrievedFile = memoryManager.getFile(fileName);
 
     System.out.println("File freed. Retrieved after free: " + retrievedFile);
-    System.out.println("Test Passed: " + (stored && fileContent.trim().equals(retrievedFile) && retrievedFile == null));
+    System.out.println("File freed successfully: " + (retrievedFile == null));
+  }
+
+  public void testFileList() {
+    List<FileInfo> files = memoryManager.getFileList();
+    System.out.println("\nTest File List:");
+    System.out.println("Files: " + files);
+
+    for (FileInfo file : files) {
+      System.out.println("File: " + file.getFileName() + " | Size: " + file.getSize());
+    }
+
+    memoryManager.freeFile("test.txt");
+    files = memoryManager.getFileList();
+    System.out.println("Files after freeing newFile.asm: " + files);
+    System.out.println("Test Passed: " + (files.size() == 0));
+
   }
 
   public static void main(String[] args) {
     MemoryManagementTest test = new MemoryManagementTest();
 
+    test.setUp();
     // comentario == passed
 
-    test.setUp();
-    test.testStoreAndRetrieveInstruction();
+    // test.testStoreAndRetrieveInstruction();
     test.testStoreAndRetrieveNumber();
     test.testStoreAndRetrieveBCP();
     test.testStoreAndRetrieveFile();
     test.testMemoryOverflow();
     test.testMultipleInstructions();
     test.testFileOperations();
+    test.testFileList();
   }
 }

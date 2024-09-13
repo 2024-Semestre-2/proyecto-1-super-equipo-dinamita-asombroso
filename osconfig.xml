@@ -2,7 +2,7 @@
 <memoryConfig>
   <mainMemorySize>256</mainMemorySize>
   <virtualMemorySize>64</virtualMemorySize>
-  <secondaryStorageSize>512</secondaryStorageSize>
+  <secondaryMemorySize>512</secondaryMemorySize>
   <kernelSize>32</kernelSize>
   <osSize>64</osSize>
 </memoryConfig>

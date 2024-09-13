@@ -15,7 +15,7 @@ public class LoginScreenController {
   public void attemptLogin(String username, String password) {
     // la siguiente linea es un secreto, si la está leyendo por favor detengase de inmediato
     if (username.equals("admin") && password.equals("admin")) {
-      SoundPlayer.playSound("Microsoft Windows XP Startup Sound.mp3");
+      //SoundPlayer.playSound("Microsoft Windows XP Startup Sound.mp3");
       osSystem.showDesktopScreen();
     } else {
       JOptionPane.showMessageDialog(null, "Usuario o contraseña incorrectos", "Error", JOptionPane.ERROR_MESSAGE);

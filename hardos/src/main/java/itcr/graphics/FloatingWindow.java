@@ -3,12 +3,10 @@ package itcr.graphics;
 import javax.swing.*;
 import java.awt.*;
 
-import itcr.controllers.DesktopScreenController;
+public abstract class FloatingWindow<T> extends JDialog {
+  protected T controller;
 
-public abstract class FloatingWindow extends JDialog {
-  protected DesktopScreenController controller;
-
-  public FloatingWindow(JFrame parent, String title, DesktopScreenController controller) {
+  public FloatingWindow(JFrame parent, String title, T controller) {
     super(parent, title, true);
     this.controller = controller;
     setResizable(false);

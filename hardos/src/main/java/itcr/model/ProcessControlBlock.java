@@ -14,7 +14,7 @@ public class ProcessControlBlock {
   private long cpuTimeUsed;
   private long startTime;
   private List<String> openFiles;
-  private ProcessControlBlock nextPCB;
+  private Process nextProcess;
   private int baseAddress;
   private int processSize;
   private int priority;
@@ -63,8 +63,8 @@ public class ProcessControlBlock {
     openFiles.remove(fileName);
   }
 
-  public ProcessControlBlock getNextPCB() {
-    return nextPCB;
+  public Process getNextPCB() {
+    return nextProcess;
   }
 
   public int getProcessId() {
@@ -155,7 +155,9 @@ public class ProcessControlBlock {
     this.processId = processId;
   }
 
-  public void setNextPCB(ProcessControlBlock nextPCB) {
-    this.nextPCB = nextPCB;
+  public void setNextProcess(Process nextProcess) {
+    this.nextProcess = nextProcess;
   }
+
+
 }

@@ -1,13 +1,17 @@
 package itcr.model;
 
 import java.io.IOException;
+import java.util.Scanner;
+
+import itcr.utilities.Validations;
 
 public class CPU {
+  private Scanner scanner = new Scanner(System.in);
   private static final int NUM_CORES = 5;
   private Process[] runningProcesses;
   private String[] instructionRegisters;
   private static final int NUM_REGISTERS = 5; // AC, AX, BX, CX, DX
-  private int[] registers;
+  private int[][] registers;
 
   // flags
   private boolean zeroFlag = false;
@@ -18,16 +22,18 @@ public class CPU {
   public CPU() {
     runningProcesses = new Process[NUM_CORES];
     instructionRegisters = new String[NUM_CORES];
-    registers = new int[NUM_REGISTERS];
+    registers = new int[NUM_CORES][NUM_REGISTERS];
     initializeRegisters();
   }
 
   private void initializeRegisters() {
-    registers[0] = 0; // AC
-    registers[1] = 0; // AX
-    registers[2] = 0; // BX
-    registers[3] = 0; // CX
-    registers[4] = 0; // DX
+    for (int i = 0; i < 5; i++) {
+      registers[i][0] = 0; // AC
+      registers[i][1] = 0; // AX
+      registers[i][2] = 0; // BX
+      registers[i][3] = 0; // CX
+      registers[i][4] = 0; // DX
+    }
   }
 
   public void assignProcessToCore(Process process, int coreId) {
@@ -39,12 +45,15 @@ public class CPU {
   }
 
   public void executeInstruction(int coreId) throws Exception {
+    Thread.sleep(1000);
     Process process = runningProcesses[coreId];
     if (process == null)
       return;
 
+      /* Sujeto a cambios */
     String instruction = process.getNextInstruction();
     instructionRegisters[coreId] = instruction;
+
 
     if (instruction == null) {
       process.updateState(ProcessState.TERMINATED);
@@ -55,55 +64,60 @@ public class CPU {
     switch (parts[0]) {
       case "LOAD": // LOAD [register] (e.g. LOAD AX)
         int registerIndex = getRegisterIndex(parts[1]);
-        registers[0] = process.getRegister(registerIndex);
+        registers[coreId][0] = registers[coreId][registerIndex];
         break;
       case "STORE": // STORE [register] (STORE THE VALUE OF AC to the register)
         registerIndex = getRegisterIndex(parts[1]);
-        process.setRegister(registerIndex, registers[0]);
+        registers[coreId][registerIndex] = registers[coreId][0];
         break;
       case "MOV":
         // first case: MOV [register] [register] (e.g. MOV AX BX)
-        if (parts.length == 3) {
+        if (parts.length == 3 && !Validations.isInteger(parts[2])) {
+          parts[1] = parts[1].replace(",", "");
           int sourceRegisterIndex = getRegisterIndex(parts[2]);
           int destinationRegisterIndex = getRegisterIndex(parts[1]);
-          process.setRegister(destinationRegisterIndex, process.getRegister(sourceRegisterIndex));
+          registers[coreId][destinationRegisterIndex] = registers[coreId][sourceRegisterIndex];
         } else {
           // second case: MOV [register] [value] (e.g. MOV AX 10)
+          parts[1] = parts[1].replace(",", "");
           registerIndex = getRegisterIndex(parts[1]);
-          process.setRegister(registerIndex, Integer.parseInt(parts[2]));
+          registers[coreId][registerIndex] =  Integer.parseInt(parts[2]);
         }
+        break;
       case "ADD": // only ADD [register] (sums the value of AC to the register)
         registerIndex = getRegisterIndex(parts[1]);
-        process.setRegister(registerIndex, process.getRegister(registerIndex) + registers[0]);
+        registers[coreId][0] = registers[coreId][0] + registers[coreId][registerIndex];
         break;
       case "SUB": // only SUB [register] (subtracts the value of AC from the register)
         registerIndex = getRegisterIndex(parts[1]);
-        process.setRegister(registerIndex, process.getRegister(registerIndex) - registers[0]);
+        registers[coreId][0] = registers[coreId][0] - registers[coreId][registerIndex];
         break;
       case "INC":
         // First case: INC [register] (e.g. INC AX) Just adds 1 to the register
         if (parts.length == 2) {
           registerIndex = getRegisterIndex(parts[1]);
-          process.setRegister(registerIndex, process.getRegister(registerIndex) + 1);
+          registers[coreId][registerIndex] = registers[coreId][registerIndex] + 1;
         } else {
           // Second case: INC (only adds 1 to the AC)
-          registers[0]++;
+          registers[coreId][0]++;
         }
+        break;
       case "DEC":
         // First case: DEC [register] (e.g. DEC AX) Just subtracts 1 from the register
         if (parts.length == 2) {
           registerIndex = getRegisterIndex(parts[1]);
-          process.setRegister(registerIndex, process.getRegister(registerIndex) - 1);
+          registers[coreId][registerIndex] = registers[coreId][registerIndex] - 1;
         } else {
           // Second case: DEC (only subtracts 1 from the AC)
-          registers[0]--;
+          registers[coreId][0]--;
         }
+        break;
       case "SWAP": // SWAP [register1] [register2] (e.g. SWAP AX BX)
-        int registerIndex1 = getRegisterIndex(parts[1]);
+        int registerIndex1 = getRegisterIndex(parts[1].replace(",", ""));
         int registerIndex2 = getRegisterIndex(parts[2]);
-        int temp = process.getRegister(registerIndex1);
-        process.setRegister(registerIndex1, process.getRegister(registerIndex2));
-        process.setRegister(registerIndex2, temp);
+        int temp = registers[coreId][registerIndex1];
+        registers[coreId][registerIndex1] = registers[coreId][registerIndex2];
+        registers[coreId][registerIndex2] = temp;
         break;
       case "INT": // INT [interruptCode] (e.g. INT 20H)
         handleInterrupt(parts[1], process);
@@ -167,15 +181,10 @@ public class CPU {
       case "20H":
         process.updateState(ProcessState.TERMINATED);
         break;
-      case "10H": //  Prints the value of the AC register
-        // TODO
+      case "10H":
         break;
       case "09H":
-        // keboard input (only number 0-255)
-        // TODO
       case "21H":
-        // File management
-        // TODO
     }
   }
 
@@ -192,13 +201,13 @@ public class CPU {
   private int getRegisterIndex(String registerName) {
     switch (registerName) {
       case "AX":
-        return 0;
-      case "BX":
         return 1;
-      case "CX":
+      case "BX":
         return 2;
-      case "DX":
+      case "CX":
         return 3;
+      case "DX":
+        return 4;
       default:
         throw new IllegalArgumentException("Unknown register: " + registerName);
     }
@@ -239,6 +248,32 @@ public class CPU {
       ProcessControlBlock pcb = process.getPCB();
       System.arraycopy(pcb.getRegisters(), 0, registers, 0, NUM_REGISTERS);
       process.setCurrentInstructionIndex(pcb.getProgramCounter());
+    }
+  }
+
+
+  public String getCoreRegister(int coreId) {
+    String res = "Process: " + coreId + "\n";
+    for (int i = 0; i < 5; i++) {
+      res+= getRegisterString(i) + registers[coreId][i] + "\n";
+    }
+    return res;
+  }
+
+  private String getRegisterString(int id) {
+    switch (id) {
+      case 0:
+        return "AC";
+      case 1:
+        return "AX";
+      case 2:
+        return "BX";
+      case 3:
+        return "CX";
+      case 4:
+        return "DX";
+      default:
+        throw new IllegalArgumentException("Unknown register: " + id);
     }
   }
 

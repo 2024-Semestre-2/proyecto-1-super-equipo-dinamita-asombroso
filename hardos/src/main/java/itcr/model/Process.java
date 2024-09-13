@@ -85,4 +85,9 @@ public class Process {
   public void setCurrentInstructionIndex(int index) {
     this.currentInstructionIndex = index;
   }
+
+
+  public int[] getRegister() {
+    return this.pcb.getRegisters();
+  }
 }

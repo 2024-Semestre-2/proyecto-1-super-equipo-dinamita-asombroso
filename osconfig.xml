@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<memoryConfig>
+  <mainMemorySize>256</mainMemorySize>
+  <virtualMemorySize>64</virtualMemorySize>
+  <secondaryStorageSize>512</secondaryStorageSize>
+  <kernelSize>32</kernelSize>
+  <osSize>64</osSize>
+</memoryConfig>

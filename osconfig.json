@@ -1,0 +1,7 @@
+{
+  "mainMemorySize": 256,
+  "virtualMemorySize": 64,
+  "secondaryStorageSize": 512,
+  "kernelSize": 32,
+  "osSize": 64
+}

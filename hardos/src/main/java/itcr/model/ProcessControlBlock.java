@@ -1,57 +1,68 @@
 package itcr.model;
 
 import java.util.List;
-import java.util.Stack;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.EmptyStackException;
+import java.util.NoSuchElementException;
+import java.time.Instant;
 
 public class ProcessControlBlock {
-  private int processId;
+  private final int processId;
   private ProcessState state;
   private int programCounter;
-  private int[] registers; // AC, AX, BX, CX, DX
-  private Stack<Integer> stack;
+  private int[] registers;
+  private ArrayDeque<Integer> stack;
   private long cpuTimeUsed;
-  private long startTime;
+  private Instant startTime;
   private List<String> openFiles;
-  private Process nextProcess;
+  private ProcessControlBlock nextProcess;
   private int baseAddress;
   private int processSize;
   private int priority;
+  private int timeSlice;
+  private int waitingTime;
+  private int turnaroundTime;
+  private Instant lastStateChangeTime;
 
   public ProcessControlBlock(int processId, int baseAddress, int processSize, int priority) {
     this.processId = processId;
     this.state = ProcessState.NEW;
     this.programCounter = 0;
-    this.registers = new int[5];
-    this.stack = new Stack<>();
+    this.registers = new int[5]; // AC, AX, BX, CX, DX
+    this.stack = new ArrayDeque<>(10);
     this.cpuTimeUsed = 0;
-    this.startTime = System.currentTimeMillis();
+    this.startTime = Instant.now();
     this.openFiles = new ArrayList<>();
     this.baseAddress = baseAddress;
     this.processSize = processSize;
     this.priority = priority;
+    this.timeSlice = 0;
+    this.waitingTime = 0;
+    this.turnaroundTime = 0;
+    this.lastStateChangeTime = Instant.now();
   }
 
   public void updateState(ProcessState newState) {
+    Instant now = Instant.now();
+    if (this.state == ProcessState.READY) {
+      this.waitingTime += now.toEpochMilli() - this.lastStateChangeTime.toEpochMilli();
+    }
     this.state = newState;
+    this.lastStateChangeTime = now;
   }
 
   public void incrementProgramCounter() {
     this.programCounter++;
   }
 
-  public void pushToStack(int value) {
-    if (stack.size() >= 5) {
+  public void pushToStack(int value) throws StackOverflowError {
+    if (stack.size() >= 10) {
       throw new StackOverflowError("Process stack is full");
     }
     stack.push(value);
   }
 
-  public int popFromStack() {
-    if (stack.isEmpty()) {
-      throw new EmptyStackException();
-    }
+  public int popFromStack() throws NoSuchElementException {
     return stack.pop();
   }
 
@@ -63,12 +74,32 @@ public class ProcessControlBlock {
     openFiles.remove(fileName);
   }
 
-  public Process getNextPCB() {
+  public ProcessControlBlock getNextPCB() {
     return nextProcess;
+  }
+
+  public void setNextPCB(ProcessControlBlock nextPCB) {
+    this.nextProcess = nextPCB;
   }
 
   public int getProcessId() {
     return processId;
+  }
+
+  public void updateCpuTimeUsed(long timeUsed) {
+    this.cpuTimeUsed += timeUsed;
+  }
+
+  public void setTimeSlice(int timeSlice) {
+    this.timeSlice = timeSlice;
+  }
+
+  public int getTimeSlice() {
+    return this.timeSlice;
+  }
+
+  public void calculateTurnaroundTime() {
+    this.turnaroundTime = (int) (Instant.now().toEpochMilli() - this.startTime.toEpochMilli());
   }
 
   public ProcessState getState() {
@@ -83,7 +114,7 @@ public class ProcessControlBlock {
     return registers;
   }
 
-  public Stack<Integer> getStack() {
+  public ArrayDeque<Integer> getStack() {
     return stack;
   }
 
@@ -91,7 +122,7 @@ public class ProcessControlBlock {
     return cpuTimeUsed;
   }
 
-  public long getStartTime() {
+  public Instant getStartTime() {
     return startTime;
   }
 
@@ -115,7 +146,7 @@ public class ProcessControlBlock {
     this.cpuTimeUsed = cpuTimeUsed;
   }
 
-  public void setStartTime(long startTime) {
+  public void setStartTime(Instant startTime) {
     this.startTime = startTime;
   }
 
@@ -135,7 +166,7 @@ public class ProcessControlBlock {
     System.arraycopy(registers, 0, this.registers, 0, this.registers.length);
   }
 
-  public void setStack(Stack<Integer> stack) {
+  public void setStack(ArrayDeque<Integer> stack) {
     this.stack = stack;
   }
 
@@ -151,13 +182,24 @@ public class ProcessControlBlock {
     this.state = state;
   }
 
-  public void setProcessId(int processId) {
-    this.processId = processId;
-  }
-
-  public void setNextProcess(Process nextProcess) {
+  public void setNextProcess(ProcessControlBlock nextProcess) {
     this.nextProcess = nextProcess;
   }
 
+  public int getWaitingTime() {
+    return waitingTime;
+  }
+
+  public int getTurnaroundTime() {
+    return turnaroundTime;
+  }
+
+  public void setRegister(Register register, int value) {
+    registers[register.ordinal()] = value;
+  }
+
+  public int getRegister(Register register) {
+    return registers[register.ordinal()];
+  }
 
 }

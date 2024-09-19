@@ -106,7 +106,7 @@ public class MemoryManager {
   public void printFirstTenOSBytes() {
     int osSpaceStart = kernelSize * KB;
     int osSpaceEnd = osSpaceStart + 100;
-    
+
     for (int i = osSpaceStart; i < osSpaceEnd; i++) {
       System.out.print(mainMemory[i] + " ");
     }
@@ -114,6 +114,39 @@ public class MemoryManager {
   }
 
   // Main memory management methods
+
+  // Allocating memory for a process
+  public int allocateMemory(String processName, int size) {
+    MemoryAllocation allocation = allocateUserSpace(size);
+    if (allocation != null) {
+      mainMemoryIndex.put(processName, allocation);
+      return allocation.startIndex;
+    }
+    return -1;
+  }
+
+  public void deallocateMemory(String processName) {
+    MemoryAllocation allocation = mainMemoryIndex.remove(processName);
+    if (allocation != null) {
+      Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
+    }
+    processInstructions.remove(processName);
+  }
+
+  public byte readByte(int address) {
+    if (address >= 0 && address < mainMemory.length) {
+      return mainMemory[address];
+    }
+    throw new IndexOutOfBoundsException("Invalid memory address: " + address);
+  }
+
+  public void writeByte(int address, byte value) {
+    if (address >= 0 && address < mainMemory.length) {
+      mainMemory[address] = value;
+    } else {
+      throw new IndexOutOfBoundsException("Invalid memory address: " + address);
+    }
+  }
 
   public boolean storeInstruction(String processName, String instruction) {
     byte[] instructionBytes = instruction.getBytes();
@@ -205,6 +238,17 @@ public class MemoryManager {
     FileInfo fileInfo = secondaryStorageIndex.remove(fileName);
     if (fileInfo != null) {
       Arrays.fill(secondaryStorage, fileInfo.startIndex, fileInfo.startIndex + fileInfo.size, (byte) 0);
+    }
+  }
+
+  public void createFile(String fileName) {
+    secondaryStorageIndex.put(fileName, new FileInfo(0, 0));
+  }
+
+  public void openFile(String fileName) {
+    FileInfo fileInfo = secondaryStorageIndex.get(fileName);
+    if (fileInfo != null) {
+      fileInfo.size = 0;
     }
   }
 

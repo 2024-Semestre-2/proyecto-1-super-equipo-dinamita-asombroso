@@ -6,15 +6,19 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import itcr.models.MemoryManager;
+
 public class Scheduler {
   private Queue<Process> readyQueue;
   private Queue<Process> waitingQueue;
   private CPU cpu;
+  private MemoryManager memoryManager;
 
-  public Scheduler(CPU cpu) {
+  public Scheduler(CPU cpu, MemoryManager memoryManager) {
     this.readyQueue = new LinkedList<>();
     this.waitingQueue = new LinkedList<>();
     this.cpu = cpu;
+    this.memoryManager = memoryManager;
   }
 
   public void addProcess(Process process) {
@@ -30,6 +34,10 @@ public class Scheduler {
         nextProcess.updateState(ProcessState.RUNNING);
       }
     }
+  }
+
+  public void executeNextInstruction() throws Exception {
+    cpu.executeInstruction(0);
   }
 
   public void handleProcessCompletion(Process process) {
@@ -56,35 +64,52 @@ public class Scheduler {
     waitingQueue = tempQueue;
   }
 
+  // public void executeInstruction() throws Exception {
+  //   for (int i = 0; i < cpu.getNumCores(); i++) {
+  //     Process process = cpu.getRunningProcess(i);
+  //     if (process != null && process.getState() == ProcessState.RUNNING) {
+  //       cpu.executeInstruction(i);
+  //     }
+  //   }
+  //   checkWaitingProcesses();
+  //   scheduleNextProcess();
+  // }
+
   public void executeInstruction() throws Exception {
-    Thread Thread1 = new Thread(() -> { try {this.cpu.executeInstruction(0);} catch (Exception e) {e.printStackTrace();} });
-    Thread Thread2 = new Thread(() -> { try {this.cpu.executeInstruction(1);} catch (Exception e) {e.printStackTrace();} });
-    Thread Thread3 = new Thread(() -> { try {this.cpu.executeInstruction(2);} catch (Exception e) {e.printStackTrace();} });
-    Thread Thread4 = new Thread(() -> { try {this.cpu.executeInstruction(3);} catch (Exception e) {e.printStackTrace();} });
-    Thread Thread5 = new Thread(() -> { try {this.cpu.executeInstruction(4);} catch (Exception e) {e.printStackTrace();} });
-    Thread1.start();
-    Thread2.start();
-    Thread3.start();
-    Thread4.start();
-    Thread5.start();
-    Thread1.join();
-    Thread2.join();
-    Thread3.join();
-    Thread4.join();
-    Thread5.join();
-    /*
-    for (String register : getCoreRegisters()) {
-      System.out.println("Registro: " + register);
-    }*/
-  } 
+    Thread[] threads = new Thread[cpu.getNumCores()];
+
+    for (int i = 0; i < cpu.getNumCores(); i++) {
+      final int coreId = i;
+      threads[i] = new Thread(() -> {
+        try {
+          Process process = cpu.getRunningProcess(coreId);
+          if (process != null && process.getState() == ProcessState.RUNNING) {
+            cpu.executeInstruction(coreId);
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      });
+      threads[i].start();
+    }
+
+    // Wait for all threads to complete
+    for (Thread thread : threads) {
+      thread.join();
+    }
+
+    checkWaitingProcesses();
+    scheduleNextProcess();
+  }
 
   public List<String> getCoreRegisters() {
-    List<String> res = new ArrayList<>();
-    for (int i = 0; i < 5; i++) {
-      res.add(cpu.getCoreRegister(i));
+    List<String> registers = new ArrayList<>();
+    for (int i = 0; i < cpu.getNumCores(); i++) {
+      registers.add("Core " + i + ": " + cpu.getRegisters(i));
     }
-    return res;
-  } 
+    return registers;
+  }
+
   private boolean processCanResume(Process process) {
     return true;
   }

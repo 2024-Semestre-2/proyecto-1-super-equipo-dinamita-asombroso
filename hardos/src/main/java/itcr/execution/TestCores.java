@@ -66,7 +66,7 @@ public class TestCores {
         Process p5 = new Process(0, 0, 0, instructions5);
 
         CPU cpu = new CPU();
-        Scheduler scheduler = new Scheduler(cpu);
+        Scheduler scheduler = new Scheduler(cpu, null);
         scheduler.addProcess(p1);
         scheduler.addProcess(p2);
         scheduler.addProcess(p3);

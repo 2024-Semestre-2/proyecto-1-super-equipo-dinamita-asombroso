@@ -8,10 +8,10 @@ import itcr.models.MemoryManager;
 
 public class CPU {
   private static final int NUM_CORES = 5;
-  private Process[] runningProcesses;
+  public Process[] runningProcesses;
   private String[] instructionRegisters;
   private EnumMap<Register, Integer>[] registers;
-  private MemoryManager memory;
+  public MemoryManager memory;
 
   // Flags
   private boolean zeroFlag = false;
@@ -36,6 +36,13 @@ public class CPU {
     }
   }
 
+  private void resetRegister(int index) {
+      registers[index] = new EnumMap<>(Register.class);
+      for (Register reg : Register.values()) {
+        registers[index].put(reg, 0);
+      }
+  }
+
   public void assignProcessToCore(Process process, int coreId) {
     if (coreId >= 0 && coreId < NUM_CORES) {
       runningProcesses[coreId] = process;
@@ -49,12 +56,17 @@ public class CPU {
     Process process = runningProcesses[coreId];
     if (process == null)
       return;
+    //
+    //String instruction = process.getNextInstruction();
 
-    String instruction = process.getNextInstruction();
+    String instruction = getNextInstruction(coreId);
+
     instructionRegisters[coreId] = instruction;
 
     if (instruction == null) {
       process.updateState(ProcessState.TERMINATED);
+      System.out.println("ready for put in terminate state core: " +  coreId);
+      dispatcher(coreId);
       return;
     }
 
@@ -62,7 +74,6 @@ public class CPU {
     InstructionType type = InstructionType.valueOf(parts[0]);
 
     instructionHandlers.get(type).accept(coreId, parts);
-
     process.getPCB().incrementProgramCounter();
     saveProcessContext(coreId);
   }
@@ -74,6 +85,7 @@ public class CPU {
       InstructionType.ADD, this::handleAdd,
       InstructionType.SUB, this::handleSub,
       InstructionType.INT, this::handleInterrupt);
+      
 
   private void handleLoad(int coreId, String[] parts) {
     Register reg = Register.valueOf(parts[1]);
@@ -173,6 +185,18 @@ public class CPU {
     return sb.toString();
   }
 
+  public void dispatcher(int index) {
+    if (index >= 0 && index < NUM_CORES) {
+        Process currentProcess = runningProcesses[index];
+        String id = "P" + currentProcess.getProcessId();
+        memory.deallocateMemory(id);
+        runningProcesses[index] = null;
+        resetRegister(index);
+    } else {
+        throw new IndexOutOfBoundsException("Index out of bounds: " + index);
+    }
+  }
+
   private boolean isNumeric(String str) {
     return str.matches("-?\\d+(\\.\\d+)?");
   }
@@ -183,5 +207,12 @@ public class CPU {
 
   private enum InterruptCode {
     X20H, X10H
+  }
+
+  private String getNextInstruction(int coreId) {
+    Process CurrentProcess = runningProcesses[coreId];
+    String id = "P" +  CurrentProcess.getProcessId();
+    String res = memory.getInstruction(id, CurrentProcess.currentInstructionIndex++);
+    return res;
   }
 }

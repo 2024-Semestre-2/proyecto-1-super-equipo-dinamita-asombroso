@@ -11,7 +11,7 @@ import itcr.models.MemoryManager;
 public class Scheduler {
   private Queue<Process> readyQueue;
   private Queue<Process> waitingQueue;
-  private CPU cpu;
+  public CPU cpu;
   private MemoryManager memoryManager;
 
   public Scheduler(CPU cpu, MemoryManager memoryManager) {
@@ -63,17 +63,6 @@ public class Scheduler {
     }
     waitingQueue = tempQueue;
   }
-
-  // public void executeInstruction() throws Exception {
-  //   for (int i = 0; i < cpu.getNumCores(); i++) {
-  //     Process process = cpu.getRunningProcess(i);
-  //     if (process != null && process.getState() == ProcessState.RUNNING) {
-  //       cpu.executeInstruction(i);
-  //     }
-  //   }
-  //   checkWaitingProcesses();
-  //   scheduleNextProcess();
-  // }
 
   public void executeInstruction() throws Exception {
     Thread[] threads = new Thread[cpu.getNumCores()];

@@ -117,6 +117,7 @@ public class MemoryManager {
 
   // Allocating memory for a process
   public int allocateMemory(String processName, int size) {
+    System.out.println("IDp: " + processName + " size: " + size);
     MemoryAllocation allocation = allocateUserSpace(size);
     if (allocation != null) {
       mainMemoryIndex.put(processName, allocation);
@@ -183,7 +184,10 @@ public class MemoryManager {
 
   public String getInstruction(String processName, int index) {
     List<MemoryAllocation> allocations = processInstructions.get(processName);
+    System.out.println("SIze : ====================================== " + allocations.size());
+
     if (allocations != null && index >= 0 && index < allocations.size()) {
+      System.out.println("Entra=)=========/(//(///&&/&/&/&/))");
       MemoryAllocation allocation = allocations.get(index);
       byte[] instructionBytes = new byte[allocation.size];
       System.arraycopy(mainMemory, allocation.startIndex, instructionBytes, 0, allocation.size);

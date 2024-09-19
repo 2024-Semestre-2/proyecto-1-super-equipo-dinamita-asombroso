@@ -16,6 +16,7 @@ public class Hard8086 extends JFrame {
   private Map<Integer, JTextArea> registersAreas;
   private JTextArea consoleArea;
   private JTextField inputField;
+  private int count;
 
   public Hard8086(CPU cpu, Scheduler scheduler, MemoryManager memoryManager) {
     this.cpu = cpu;
@@ -31,6 +32,7 @@ public class Hard8086 extends JFrame {
 
   private void initComponents() {
     setLayout(new BorderLayout());
+    count = 0;
 
     JPanel registersPanel = new JPanel(new GridLayout(1, cpu.getNumCores()));
     registersAreas = new HashMap<>();
@@ -68,7 +70,13 @@ public class Hard8086 extends JFrame {
   private void executeNextInstruction(ActionEvent e) {
     try {
       scheduler.executeInstruction();
+      System.out.println("ejecuciones: "  + count++);
       updateRegistersDisplay();
+
+      CPU cpu = scheduler.cpu;
+      MemoryManager memory = cpu.memory;
+      memory.printAllInstructions("P" + cpu.runningProcesses[0].getProcessId());
+
       consoleArea.append("Executed next instruction\n");
     } catch (Exception ex) {
       consoleArea.append("Error: " + ex.getMessage() + "\n");

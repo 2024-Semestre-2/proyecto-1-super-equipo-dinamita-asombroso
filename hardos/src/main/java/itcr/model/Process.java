@@ -7,7 +7,7 @@ import java.time.Instant;
 public class Process {
   private ProcessControlBlock pcb;
   private List<String> instructions;
-  private int currentInstructionIndex;
+  public int currentInstructionIndex;
   private static int processCounter = 0;
   private List<Process> children;
   private Process parent;

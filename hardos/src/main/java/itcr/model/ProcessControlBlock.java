@@ -4,10 +4,23 @@ import java.util.List;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.NoSuchElementException;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
 import java.time.Instant;
 
 public class ProcessControlBlock {
-  private final int processId;
+  private int processId;
   private ProcessState state;
   private int programCounter;
   private int[] registers;
@@ -40,6 +53,18 @@ public class ProcessControlBlock {
     this.waitingTime = 0;
     this.turnaroundTime = 0;
     this.lastStateChangeTime = Instant.now();
+  }
+
+  private static final Gson gson = new GsonBuilder()
+      .registerTypeAdapter(Instant.class, new InstantAdapter())
+      .create();
+
+  public String toJsonString() {
+    return gson.toJson(this);
+  }
+
+  public static ProcessControlBlock fromJsonString(String jsonString) {
+    return gson.fromJson(jsonString, ProcessControlBlock.class);
   }
 
   public void updateState(ProcessState newState) {
@@ -200,6 +225,21 @@ public class ProcessControlBlock {
 
   public int getRegister(Register register) {
     return registers[register.ordinal()];
+  }
+
+  private static class InstantAdapter implements JsonSerializer<Instant>, JsonDeserializer<Instant> {
+    @Override
+    public Instant deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+        throws JsonParseException {
+      // TODO Auto-generated method stub
+      return Instant.ofEpochMilli(json.getAsJsonPrimitive().getAsLong());
+    }
+
+    @Override
+    public JsonElement serialize(Instant src, Type typeOfSrc, JsonSerializationContext context) {
+      // TODO Auto-generated method stub
+      return new JsonPrimitive(src.toEpochMilli());
+    }
   }
 
 }

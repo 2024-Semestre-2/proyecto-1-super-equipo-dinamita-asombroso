@@ -2,20 +2,26 @@ package itcr.model;
 
 import java.util.List;
 import java.util.ArrayList;
-import java.time.Instant;
 
 public class Process {
   private ProcessControlBlock pcb;
   private List<String> instructions;
-  public int currentInstructionIndex;
-  private static int processCounter = 0;
+  private int currentInstructionIndex;
+  public static int processCounter = 0;
   private List<Process> children;
   private Process parent;
   private int exitCode;
 
-  public Process(int baseAddress, int processSize, int priority, List<String> instructions) {
-    this.pcb = new ProcessControlBlock(processCounter++, baseAddress, processSize, priority);
+  public Process(List<String> instructions) {
     this.instructions = new ArrayList<>(instructions);
+    this.currentInstructionIndex = 0;
+    this.children = new ArrayList<>();
+    this.exitCode = -1;
+  }
+
+  public Process(ProcessControlBlock pcb) {
+    this.pcb = pcb;
+    this.instructions = new ArrayList<>();
     this.currentInstructionIndex = 0;
     this.children = new ArrayList<>();
     this.exitCode = -1;
@@ -42,6 +48,10 @@ public class Process {
 
   public ProcessControlBlock getPCB() {
     return pcb;
+  }
+
+  public void setPCB(ProcessControlBlock pcb) {
+    this.pcb = pcb;
   }
 
   public void updateState(ProcessState newState) {
@@ -73,6 +83,10 @@ public class Process {
 
   public int popFromStack() {
     return pcb.popFromStack();
+  }
+
+  public List<String> getInstructions() {
+    return new ArrayList<>(instructions);
   }
 
   public void addChild(Process child) {
@@ -142,11 +156,7 @@ public class Process {
   }
 
   public void setCurrentInstructionIndex(int index) {
-    if (index >= 0 && index < instructions.size()) {
-      this.currentInstructionIndex = index;
-      pcb.setProgramCounter(index);
-    } else {
-      throw new IndexOutOfBoundsException("Invalid instruction index");
-    }
+    this.currentInstructionIndex = index;
+    pcb.setProgramCounter(index);
   }
 }

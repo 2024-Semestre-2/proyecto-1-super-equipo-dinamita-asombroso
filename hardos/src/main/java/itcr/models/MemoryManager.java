@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Arrays;
+import java.util.Comparator;
 
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -23,9 +24,9 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 public class MemoryManager {
-  private static final int DEFAULT_MAIN_MEMORY_SIZE = 2000;
+  private static final int DEFAULT_MAIN_MEMORY_SIZE = 512;
   private static final int DEFAULT_VIRTUAL_MEMORY_SIZE = 64;
-  private static final int DEFAULT_SECONDARY_STORAGE_SIZE = 2000;
+  private static final int DEFAULT_SECONDARY_STORAGE_SIZE = 256;
   private static final int KB = 1024;
 
   private int mainMemorySize;
@@ -38,11 +39,13 @@ public class MemoryManager {
 
   private Map<String, MemoryAllocation> mainMemoryIndex;
   private Map<String, FileInfo> secondaryStorageIndex;
-  private Map<String, List<MemoryAllocation>> processInstructions;
+
+  private List<MemoryAllocation> freeSpaces;
+  private Map<String, List<InstructionIndex>> processInstructionIndices;
 
   private int kernelSize;
   private int osSize;
-  private int userSpaceSize;
+  private int userSpaceStart;
 
   public MemoryManager() {
     mainMemorySize = DEFAULT_MAIN_MEMORY_SIZE;
@@ -64,7 +67,7 @@ public class MemoryManager {
     this.virtualMemorySize = DEFAULT_VIRTUAL_MEMORY_SIZE;
     this.kernelSize = kernelSize;
     this.osSize = osSize;
-    this.userSpaceSize = mainMemorySize - kernelSize - osSize;
+    this.userSpaceStart = mainMemorySize - kernelSize - osSize;
     initializeMemory();
   }
 
@@ -75,100 +78,127 @@ public class MemoryManager {
 
     this.mainMemoryIndex = new HashMap<>();
     this.secondaryStorageIndex = new HashMap<>();
-    this.processInstructions = new HashMap<>();
-  }
 
-  public void printAllInstructions(String processName) {
-    List<MemoryAllocation> allocations = processInstructions.get(processName);
-    if (allocations != null && !allocations.isEmpty()) {
-      System.out.println("All stored instructions for process " + processName + ":");
-      for (int i = 0; i < allocations.size(); i++) {
-        String instruction = getInstruction(processName, i);
-        String instructionAddress = String.format("%04X", allocations.get(i).startIndex);
-        String instructionSize = String.format("%04d", allocations.get(i).size);
-        String instructionAddressDecimal = String.format("%04d", allocations.get(i).startIndex);
-        System.out.println("Instruction " + i + ": " + instruction + " | Address: " + instructionAddress + " | Size: "
-            + instructionSize + " | Decimal Address: " + instructionAddressDecimal);
-      }
-    } else {
-      System.out.println("No instructions stored for process " + processName);
-    }
-  }
+    this.userSpaceStart = (kernelSize + osSize) * KB;
+    this.freeSpaces = new ArrayList<>();
+    freeSpaces.add(new MemoryAllocation(userSpaceStart, (mainMemorySize - kernelSize - osSize) * KB));
 
-  public void printFirstTenKernelBytes() {
-    System.out.println("First ten kernel bytes:");
-    for (int i = 0; i < 10; i++) {
-      System.out.print(mainMemory[i] + " ");
-    }
-    System.out.println();
-  }
-
-  public void printFirstTenOSBytes() {
-    int osSpaceStart = kernelSize * KB;
-    int osSpaceEnd = osSpaceStart + 100;
-
-    for (int i = osSpaceStart; i < osSpaceEnd; i++) {
-      System.out.print(mainMemory[i] + " ");
-    }
-    System.out.println();
+    this.processInstructionIndices = new HashMap<>();
   }
 
   // Main memory management methods
 
   // Allocating memory for a process
-  public int allocateMemory(String processName, int size) {
-    System.out.println("IDp: " + processName + " size: " + size);
-    MemoryAllocation allocation = allocateUserSpace(size);
-    if (allocation != null) {
-      mainMemoryIndex.put(processName, allocation);
-      return allocation.startIndex;
+
+  public void printMemoryMap() {
+    System.out.println("Memory Map:");
+    System.out.println("Kernel Space: 0 - " + (kernelSize * KB - 1));
+    System.out.println("OS Space: " + (kernelSize * KB) + " - " + (userSpaceStart - 1));
+    System.out.println("User Space: " + userSpaceStart + " - " + (mainMemorySize * KB - 1));
+    System.out.println("\nAllocated Processes:");
+    for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
+      MemoryAllocation allocation = entry.getValue();
+      System.out.println(
+          entry.getKey() + ": " + allocation.startIndex + " - " + (allocation.startIndex + allocation.size - 1));
     }
-    return -1;
+    System.out.println("\nFree Spaces:");
+    for (MemoryAllocation freeSpace : freeSpaces) {
+      System.out.println(freeSpace.startIndex + " - " + (freeSpace.startIndex + freeSpace.size - 1));
+    }
+  }
+
+  public void printAllInstructions(String processName) {
+    // Print all instructions for a process, and their positions of bytes in mainMemory
+    List<InstructionIndex> indices = processInstructionIndices.get(processName);
+    if (indices != null) {
+      System.out.println("Instructions for process " + processName + ":");
+      for (int i = 0; i < indices.size(); i++) {
+        InstructionIndex instructionIndex = indices.get(i);
+        byte[] instructionBytes = new byte[instructionIndex.length];
+        System.arraycopy(mainMemory, instructionIndex.startIndex, instructionBytes, 0, instructionIndex.length);
+        System.out.println(i + ": " + new String(instructionBytes) + " | Bytes: " + instructionIndex.startIndex + " - "
+            + (instructionIndex.startIndex + instructionIndex.length - 1));
+      }
+    }
+  }
+
+  public int allocateMemory(String processName, int size) {
+    for (int i = 0; i < freeSpaces.size(); i++) {
+      MemoryAllocation freeSpace = freeSpaces.get(i);
+      if (freeSpace.size >= size) {
+        MemoryAllocation allocation = new MemoryAllocation(freeSpace.startIndex, size);
+        mainMemoryIndex.put(processName, allocation);
+
+        if (freeSpace.size > size) {
+          freeSpaces.set(i, new MemoryAllocation(freeSpace.startIndex + size, freeSpace.size - size));
+        } else {
+          freeSpaces.remove(i);
+        }
+
+        return allocation.startIndex;
+      }
+    }
+    return -1; // No hay espacio suficiente
   }
 
   public void deallocateMemory(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName);
     if (allocation != null) {
       Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
+      processInstructionIndices.remove(processName);
+      addFreeSpace(new MemoryAllocation(allocation.startIndex, allocation.size));
+      mergeFreeSpaces();
     }
-    processInstructions.remove(processName);
   }
 
-  public byte readByte(int address) {
-    if (address >= 0 && address < mainMemory.length) {
-      return mainMemory[address];
-    }
-    throw new IndexOutOfBoundsException("Invalid memory address: " + address);
+  private void addFreeSpace(MemoryAllocation newFreeSpace) {
+    freeSpaces.add(newFreeSpace);
+    freeSpaces.sort(Comparator.comparingInt(a -> a.startIndex));
   }
 
-  public void writeByte(int address, byte value) {
-    if (address >= 0 && address < mainMemory.length) {
-      mainMemory[address] = value;
-    } else {
-      throw new IndexOutOfBoundsException("Invalid memory address: " + address);
+  private void mergeFreeSpaces() {
+    if (freeSpaces.size() < 2)
+      return;
+
+    List<MemoryAllocation> mergedSpaces = new ArrayList<>();
+    MemoryAllocation current = freeSpaces.get(0);
+
+    for (int i = 1; i < freeSpaces.size(); i++) {
+      MemoryAllocation next = freeSpaces.get(i);
+      if (current.startIndex + current.size == next.startIndex) {
+        // Los espacios son adyacentes, fusionarlos
+        current = new MemoryAllocation(current.startIndex, current.size + next.size);
+      } else {
+        mergedSpaces.add(current);
+        current = next;
+      }
     }
+    mergedSpaces.add(current);
+
+    freeSpaces = mergedSpaces;
   }
 
   public boolean storeInstruction(String processName, String instruction) {
-    byte[] instructionBytes = instruction.getBytes();
-    MemoryAllocation allocation = allocateUserSpace(instructionBytes.length);
-    if (allocation != null) {
-      System.arraycopy(instructionBytes, 0, mainMemory, allocation.startIndex, instructionBytes.length);
-      processInstructions.computeIfAbsent(processName, k -> new ArrayList<>()).add(allocation);
-      return true;
+    MemoryAllocation processAllocation = mainMemoryIndex.get(processName);
+    if (processAllocation == null) {
+      return false;
     }
-    return false;
-  }
 
-  public boolean storeNumber(String processName, int number) {
-    MemoryAllocation allocation = allocateUserSpace(Integer.BYTES);
-    if (allocation != null) {
-      ByteBuffer.wrap(mainMemory, allocation.startIndex, Integer.BYTES).putInt(number);
-      String key = processName + "_number";
-      mainMemoryIndex.put(key, allocation);
-      return true;
+    byte[] instructionBytes = instruction.getBytes();
+    if (processAllocation.size - processAllocation.used < instructionBytes.length) {
+      return false; // No hay espacio suficiente
     }
-    return false;
+
+    int startIndex = processAllocation.startIndex + processAllocation.used;
+    System.arraycopy(instructionBytes, 0, mainMemory, startIndex, instructionBytes.length);
+
+    processInstructionIndices
+        .computeIfAbsent(processName, k -> new ArrayList<>())
+        .add(new InstructionIndex(startIndex, instructionBytes.length));
+
+    processAllocation.used += instructionBytes.length;
+
+    return true;
   }
 
   public boolean storeBCP(String processName, String bcpString) {
@@ -182,27 +212,30 @@ public class MemoryManager {
     return false;
   }
 
-  public String getInstruction(String processName, int index) {
-    List<MemoryAllocation> allocations = processInstructions.get(processName);
-    System.out.println("SIze : ====================================== " + allocations.size());
-
-    if (allocations != null && index >= 0 && index < allocations.size()) {
-      System.out.println("Entra=)=========/(//(///&&/&/&/&/))");
-      MemoryAllocation allocation = allocations.get(index);
-      byte[] instructionBytes = new byte[allocation.size];
-      System.arraycopy(mainMemory, allocation.startIndex, instructionBytes, 0, allocation.size);
-      return new String(instructionBytes);
+  public void printAllBCPs() {
+    // Print all BCPs and their positions of bytes in mainMemory
+    for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
+      String processName = entry.getKey();
+      if (processName.endsWith("_bcp")) {
+        MemoryAllocation allocation = entry.getValue();
+        byte[] bcpBytes = new byte[allocation.size];
+        System.arraycopy(mainMemory, allocation.startIndex, bcpBytes, 0, allocation.size);
+        System.out.println("BCP for process " + processName + ": " + new String(bcpBytes) + " | Bytes: "
+            + allocation.startIndex + " - " + (allocation.startIndex + allocation.size - 1));
+      }
     }
-    return null;
   }
 
-  public Integer getNumber(String processName, int index) {
-    String key = processName + "_number";
-    MemoryAllocation allocation = mainMemoryIndex.get(key);
-    if (allocation != null) {
-      return ByteBuffer.wrap(mainMemory, allocation.startIndex, Integer.BYTES).getInt();
+  public String getInstruction(String processName, int index) {
+    List<InstructionIndex> indices = processInstructionIndices.get(processName);
+    if (indices == null || index < 0 || index >= indices.size()) {
+      return null;
     }
-    return null;
+
+    InstructionIndex instructionIndex = indices.get(index);
+    byte[] instructionBytes = new byte[instructionIndex.length];
+    System.arraycopy(mainMemory, instructionIndex.startIndex, instructionBytes, 0, instructionIndex.length);
+    return new String(instructionBytes);
   }
 
   public String getBCP(String processName) {
@@ -213,6 +246,15 @@ public class MemoryManager {
       return new String(bcpBytes);
     }
     return null;
+  }
+
+  public boolean freeBCP(String processName) {
+    MemoryAllocation allocation = mainMemoryIndex.remove(processName + "_bcp");
+    if (allocation != null) {
+      Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
+      return true;
+    }
+    return false;
   }
 
   // Secondary memory management methods
@@ -506,5 +548,15 @@ public class MemoryManager {
 
   public void clearMemory() {
     initializeMemory();
+  }
+
+  private static class InstructionIndex {
+    int startIndex;
+    int length;
+
+    InstructionIndex(int startIndex, int length) {
+      this.startIndex = startIndex;
+      this.length = length;
+    }
   }
 }

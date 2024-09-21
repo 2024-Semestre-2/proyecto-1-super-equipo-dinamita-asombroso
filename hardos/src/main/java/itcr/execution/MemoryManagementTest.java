@@ -26,19 +26,6 @@ public class MemoryManagementTest {
     System.out.println("Test Passed: " + (stored && instruction.equals(retrievedInstruction)));
   }
 
-  public void testStoreAndRetrieveNumber() {
-    String processName = "process1";
-    int number = 42;
-
-    boolean stored = memoryManager.storeNumber(processName, number);
-    Integer retrievedNumber = memoryManager.getNumber(processName, 0);
-
-    System.out.println("\nTest Store and Retrieve Number:");
-    System.out.println("Stored: " + stored);
-    System.out.println("Retrieved: " + retrievedNumber);
-    System.out.println("Test Passed: " + (stored && number == retrievedNumber));
-  }
-
   public void testStoreAndRetrieveBCP() {
     String processName = "process1";
     String bcpString = "bcp(process1){estado:listo,tiempo_llegada:0,tiempo_cpu:5}";
@@ -94,13 +81,13 @@ public class MemoryManagementTest {
     }
 
     System.out.println("\nAll instructions after storing:");
-    memoryManager.printAllInstructions(processName);
+    //memoryManager.printAllInstructions(processName);
 
     System.out.println("\nFirst ten kernel bytes:");
-    memoryManager.printFirstTenKernelBytes();
+    //memoryManager.printFirstTenKernelBytes();
 
     System.out.println("\nFirst ten OS bytes:");
-    memoryManager.printFirstTenOSBytes();
+    //memoryManager.printFirstTenOSBytes();
   }
 
   public void testFileOperations() {
@@ -120,6 +107,20 @@ public class MemoryManagementTest {
 
     System.out.println("File freed. Retrieved after free: " + retrievedFile);
     System.out.println("File freed successfully: " + (retrievedFile == null));
+  }
+
+  public void testProcessSaving() {
+    List<String> instructions = List.of("MOV AX, 5", "ADD AX, 10", "PUSH AX");
+    String processName = "P0";
+    int instructionsSizeOnBytes = instructions.stream().mapToInt(String::length).sum();
+
+    memoryManager.allocateMemory(processName, instructionsSizeOnBytes);
+
+    for (int i = 0; i < instructions.size(); i++) {
+      memoryManager.storeInstruction(processName, instructions.get(i));
+    }
+
+    //memoryManager.printAllInstructions(processName);
   }
 
   public void testFileList() {
@@ -145,12 +146,13 @@ public class MemoryManagementTest {
     // comentario == passed
 
     // test.testStoreAndRetrieveInstruction();
-    test.testStoreAndRetrieveNumber();
-    test.testStoreAndRetrieveBCP();
-    test.testStoreAndRetrieveFile();
-    test.testMemoryOverflow();
-    test.testMultipleInstructions();
-    test.testFileOperations();
-    test.testFileList();
+    // test.testStoreAndRetrieveNumber();
+    // test.testStoreAndRetrieveBCP();
+    // test.testStoreAndRetrieveFile();
+    // test.testMemoryOverflow();
+    // test.testMultipleInstructions();
+    // test.testFileOperations();
+    // test.testFileList();
+    test.testProcessSaving();
   }
 }

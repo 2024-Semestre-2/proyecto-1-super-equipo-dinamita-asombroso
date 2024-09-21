@@ -10,18 +10,15 @@ import itcr.model.*;
 import itcr.models.*;
 
 public class Hard8086 extends JFrame {
-  private CPU cpu;
   private Scheduler scheduler;
-  private MemoryManager memoryManager;
   private Map<Integer, JTextArea> registersAreas;
   private JTextArea consoleArea;
   private JTextField inputField;
   private int count;
+  private final int NUM_CORES = 5;
 
-  public Hard8086(CPU cpu, Scheduler scheduler, MemoryManager memoryManager) {
-    this.cpu = cpu;
+  public Hard8086(Scheduler scheduler) {
     this.scheduler = scheduler;
-    this.memoryManager = memoryManager;
 
     setTitle("Hard8086 Simulator");
     setSize(800, 600);
@@ -34,10 +31,10 @@ public class Hard8086 extends JFrame {
     setLayout(new BorderLayout());
     count = 0;
 
-    JPanel registersPanel = new JPanel(new GridLayout(1, cpu.getNumCores()));
+    JPanel registersPanel = new JPanel(new GridLayout(1, NUM_CORES));
     registersAreas = new HashMap<>();
 
-    for (int i = 0; i < cpu.getNumCores(); i++) {
+    for (int i = 0; i < NUM_CORES; i++) {
       JTextArea registerArea = new JTextArea(10, 15);
       registerArea.setEditable(false);
       registersAreas.put(i, registerArea);
@@ -70,12 +67,10 @@ public class Hard8086 extends JFrame {
   private void executeNextInstruction(ActionEvent e) {
     try {
       scheduler.executeInstruction();
-      System.out.println("ejecuciones: "  + count++);
       updateRegistersDisplay();
 
-      CPU cpu = scheduler.cpu;
-      MemoryManager memory = cpu.memory;
-      memory.printAllInstructions("P" + cpu.runningProcesses[0].getProcessId());
+      // CPU cpu = scheduler.cpu;
+      // MemoryManager memory = cpu.memory;
 
       consoleArea.append("Executed next instruction\n");
     } catch (Exception ex) {
@@ -84,9 +79,9 @@ public class Hard8086 extends JFrame {
   }
 
   private void updateRegistersDisplay() {
-    for (int i = 0; i < cpu.getNumCores(); i++) {
+    for (int i = 0; i < NUM_CORES; i++) {
       JTextArea area = registersAreas.get(i);
-      area.setText(cpu.getRegisters(i));
+      area.setText(scheduler.getRegisters(i));
     }
   }
 

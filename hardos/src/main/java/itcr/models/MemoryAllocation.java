@@ -3,9 +3,11 @@ package itcr.models;
 public class MemoryAllocation {
   int startIndex;
   int size;
+  int used;
 
-  public MemoryAllocation(int startIndex, int size) {
+  MemoryAllocation(int startIndex, int size) {
     this.startIndex = startIndex;
     this.size = size;
+    this.used = 0;
   }
 }

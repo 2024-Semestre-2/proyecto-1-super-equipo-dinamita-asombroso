@@ -1,6 +1,5 @@
 package itcr.model;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -9,8 +8,8 @@ import java.util.Queue;
 import itcr.models.MemoryManager;
 
 public class Scheduler {
-  private Queue<Process> readyQueue;
-  private Queue<Process> waitingQueue;
+  private Queue<Integer> readyQueue;
+  private Queue<Integer> waitingQueue;
   public CPU cpu;
   private MemoryManager memoryManager;
 
@@ -19,19 +18,34 @@ public class Scheduler {
     this.waitingQueue = new LinkedList<>();
     this.cpu = cpu;
     this.memoryManager = memoryManager;
+    this.cpu.memory = memoryManager;
+  }
+
+  public String getRegisters(int coreId) {
+    return cpu.getRegisters(coreId);
   }
 
   public void addProcess(Process process) {
-    readyQueue.offer(process);
-    process.updateState(ProcessState.READY);
+    int processId = process.getPCB().getProcessId();
+    readyQueue.offer(processId);
+    ProcessControlBlock pcb = process.getPCB();
+    pcb.setState(ProcessState.READY);
+    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
   }
 
   public void scheduleNextProcess() {
     for (int i = 0; i < cpu.getNumCores(); i++) {
       if (cpu.isCoreAvailable(i) && !readyQueue.isEmpty()) {
-        Process nextProcess = readyQueue.poll();
+        int nextProcessId = readyQueue.poll();
+        String bcpJson = memoryManager.getBCP("P" + nextProcessId);
+        ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+        pcb.setState(ProcessState.RUNNING);
+        memoryManager.storeBCP("P" + nextProcessId, pcb.toJsonString());
+        System.out.println("Running process P" + nextProcessId);
+        memoryManager.printAllInstructions("P" + nextProcessId);
+
+        Process nextProcess = new itcr.model.Process(pcb);
         cpu.assignProcessToCore(nextProcess, i);
-        nextProcess.updateState(ProcessState.RUNNING);
       }
     }
   }
@@ -41,24 +55,35 @@ public class Scheduler {
   }
 
   public void handleProcessCompletion(Process process) {
-    process.updateState(ProcessState.TERMINATED);
-    // Liberate resources, stats, etc TODO
+    int processId = process.getPCB().getProcessId();
+    String bcpJson = memoryManager.getBCP("P" + processId);
+    ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+    pcb.setState(ProcessState.TERMINATED);
+    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
+    // Liberate resources, update stats, etc.
   }
 
   public void moveToWaiting(Process process) {
-    waitingQueue.offer(process);
-    process.updateState(ProcessState.WAITING);
+    int processId = process.getPCB().getProcessId();
+    waitingQueue.offer(processId);
+    String bcpJson = memoryManager.getBCP("P" + processId);
+    ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+    pcb.setState(ProcessState.WAITING);
+    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
   }
 
   public void checkWaitingProcesses() {
-    Queue<Process> tempQueue = new LinkedList<>();
+    Queue<Integer> tempQueue = new LinkedList<>();
     while (!waitingQueue.isEmpty()) {
-      Process process = waitingQueue.poll();
-      if (processCanResume(process)) {
-        readyQueue.offer(process);
-        process.updateState(ProcessState.READY);
+      int processId = waitingQueue.poll();
+      if (processCanResume(processId)) {
+        readyQueue.offer(processId);
+        String bcpJson = memoryManager.getBCP("P" + processId);
+        ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+        pcb.setState(ProcessState.READY);
+        memoryManager.storeBCP("P" + processId, pcb.toJsonString());
       } else {
-        tempQueue.offer(process);
+        tempQueue.offer(processId);
       }
     }
     waitingQueue = tempQueue;
@@ -72,8 +97,15 @@ public class Scheduler {
       threads[i] = new Thread(() -> {
         try {
           Process process = cpu.getRunningProcess(coreId);
-          if (process != null && process.getState() == ProcessState.RUNNING) {
-            cpu.executeInstruction(coreId);
+          System.out.println("Core " + coreId + " running process: " + process);
+          if (process != null) {
+            String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
+            ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+            if (pcb.getState() == ProcessState.RUNNING) {
+              cpu.executeInstruction(coreId);
+              pcb.incrementProgramCounter();
+              memoryManager.storeBCP("P" + process.getPCB().getProcessId(), pcb.toJsonString());
+            }
           }
         } catch (Exception e) {
           e.printStackTrace();
@@ -99,12 +131,12 @@ public class Scheduler {
     return registers;
   }
 
-  private boolean processCanResume(Process process) {
+  private boolean processCanResume(int processId) {
+    // Implement logic to determine if a process can resume
     return true;
   }
 
   public boolean hasProcessesRunning() {
     return !(readyQueue.isEmpty() && waitingQueue.isEmpty());
   }
-
 }

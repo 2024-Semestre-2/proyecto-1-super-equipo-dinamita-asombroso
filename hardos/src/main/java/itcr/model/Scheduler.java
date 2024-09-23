@@ -5,8 +5,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
-import itcr.models.MemoryManager;
-
 public class Scheduler {
   private Queue<Integer> readyQueue;
   private Queue<Integer> waitingQueue;
@@ -30,7 +28,7 @@ public class Scheduler {
     readyQueue.offer(processId);
     ProcessControlBlock pcb = process.getPCB();
     pcb.setState(ProcessState.READY);
-    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
+    //memoryManager.storeBCP("P" + processId, pcb.toJsonString()); // 0
   }
 
   public void scheduleNextProcess() {
@@ -40,11 +38,10 @@ public class Scheduler {
         String bcpJson = memoryManager.getBCP("P" + nextProcessId);
         ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
         pcb.setState(ProcessState.RUNNING);
-        memoryManager.storeBCP("P" + nextProcessId, pcb.toJsonString());
-        System.out.println("Running process P" + nextProcessId);
-        memoryManager.printAllInstructions("P" + nextProcessId);
+        memoryManager.storeBCP("P" + nextProcessId, pcb.toJsonString()); // 1
 
         Process nextProcess = new itcr.model.Process(pcb);
+        nextProcess.setQtyInstructions(memoryManager.getQtyInstructions("P" + nextProcessId));
         cpu.assignProcessToCore(nextProcess, i);
       }
     }
@@ -59,7 +56,7 @@ public class Scheduler {
     String bcpJson = memoryManager.getBCP("P" + processId);
     ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
     pcb.setState(ProcessState.TERMINATED);
-    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
+    // memoryManager.storeBCP("P" + processId, pcb.toJsonString()); 3
     // Liberate resources, update stats, etc.
   }
 
@@ -69,7 +66,7 @@ public class Scheduler {
     String bcpJson = memoryManager.getBCP("P" + processId);
     ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
     pcb.setState(ProcessState.WAITING);
-    memoryManager.storeBCP("P" + processId, pcb.toJsonString());
+    // memoryManager.storeBCP("P" + processId, pcb.toJsonString()); 4
   }
 
   public void checkWaitingProcesses() {
@@ -81,7 +78,7 @@ public class Scheduler {
         String bcpJson = memoryManager.getBCP("P" + processId);
         ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
         pcb.setState(ProcessState.READY);
-        memoryManager.storeBCP("P" + processId, pcb.toJsonString());
+        //memoryManager.storeBCP("P" + processId, pcb.toJsonString());// 5
       } else {
         tempQueue.offer(processId);
       }
@@ -97,14 +94,15 @@ public class Scheduler {
       threads[i] = new Thread(() -> {
         try {
           Process process = cpu.getRunningProcess(coreId);
-          System.out.println("Core " + coreId + " running process: " + process);
           if (process != null) {
             String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
             ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
             if (pcb.getState() == ProcessState.RUNNING) {
               cpu.executeInstruction(coreId);
-              pcb.incrementProgramCounter();
-              memoryManager.storeBCP("P" + process.getPCB().getProcessId(), pcb.toJsonString());
+              if (pcb.getState() != ProcessState.WAITING) {
+                pcb.incrementProgramCounter();
+                //memoryManager.storeBCP("P" + process.getPCB().getProcessId(), pcb.toJsonString()); 6
+              }
             }
           }
         } catch (Exception e) {
@@ -123,6 +121,10 @@ public class Scheduler {
     scheduleNextProcess();
   }
 
+  public boolean hasMoreInstructions() {
+    return !readyQueue.isEmpty() || !waitingQueue.isEmpty();
+  }
+
   public List<String> getCoreRegisters() {
     List<String> registers = new ArrayList<>();
     for (int i = 0; i < cpu.getNumCores(); i++) {
@@ -138,5 +140,13 @@ public class Scheduler {
 
   public boolean hasProcessesRunning() {
     return !(readyQueue.isEmpty() && waitingQueue.isEmpty());
+  }
+
+  public String getFileContent(String filename) {
+    return memoryManager.getFile(filename);
+  }
+
+  public MemoryManager getMemoryManager() {
+    return memoryManager;
   }
 }

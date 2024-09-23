@@ -1,4 +1,4 @@
-package itcr.models;
+package itcr.model;
 
 public class FileInfo {
   String fileName;

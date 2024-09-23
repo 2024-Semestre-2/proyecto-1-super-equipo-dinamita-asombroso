@@ -1,7 +1,7 @@
 package itcr.controllers;
 
 import itcr.graphics.OSSystem;
-import itcr.models.MemoryManager;
+import itcr.model.MemoryManager;
 
 public class OSSystemController {
   private OSSystem osSystem;

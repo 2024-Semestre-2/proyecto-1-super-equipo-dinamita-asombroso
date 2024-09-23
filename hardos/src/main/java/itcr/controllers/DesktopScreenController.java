@@ -2,7 +2,11 @@ package itcr.controllers;
 
 import itcr.graphics.FileExplorer;
 import itcr.graphics.MyPcConfig;
-import itcr.models.MemoryManager;
+import itcr.graphics.Hard8086;
+import itcr.model.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -10,16 +14,19 @@ import javax.swing.JOptionPane;
 public class DesktopScreenController {
   private JFrame parent;
   private MemoryManager memoryManager;
+  private Scheduler scheduler;
 
   public DesktopScreenController(JFrame parent) {
     this.parent = parent;
+    CPU cpu = new CPU();
     this.memoryManager = new MemoryManager();
+    this.scheduler = new Scheduler(cpu, memoryManager);
     this.loadInitialFilesInMemory();
   }
 
   public void loadInitialFilesInMemory() {
-    String[] fileNames = { "file1.txt", "file2.txt"};
-    String[] fileContent = { "Contenido del archivo 1", "Contenido del archivo 2" };
+    String[] fileNames = { "createfile.asm" };
+    String[] fileContent = { "MOV AX, 0\nINT _08H\nMOV CX, BX\nINT _08H\nINT _21H\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nINT _20H" };
 
     boolean allFilesStored = false;
 
@@ -46,6 +53,11 @@ public class DesktopScreenController {
     FileExplorerController fileExplorerController = new FileExplorerController(memoryManager);
     FileExplorer fileExplorer = new FileExplorer(parent, fileExplorerController);
     fileExplorer.setVisible(true);
+  }
+
+  public void openHard8086() {
+    Hard8086 hard8086 = new Hard8086(parent, scheduler);
+    hard8086.setVisible(true);
   }
 
   public void loadConfigurationFromFile(String configFilePath, String fileType) {

@@ -1,9 +1,7 @@
 package itcr.model;
 
 import java.util.List;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.NoSuchElementException;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -14,7 +12,6 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
-import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
 import java.time.Instant;
@@ -24,7 +21,7 @@ public class ProcessControlBlock {
   private ProcessState state;
   private int programCounter;
   private int[] registers;
-  private ArrayDeque<Integer> stack;
+  // private ArrayDeque<Integer> stack;
   private long cpuTimeUsed;
   private Instant startTime;
   private List<String> openFiles;
@@ -36,13 +33,13 @@ public class ProcessControlBlock {
   private int waitingTime;
   private int turnaroundTime;
   private Instant lastStateChangeTime;
+  private int stackPointer = -1; // -1 means stack is empty
 
   public ProcessControlBlock(int processId, int baseAddress, int processSize, int priority) {
     this.processId = processId;
     this.state = ProcessState.NEW;
     this.programCounter = 0;
     this.registers = new int[5]; // AC, AX, BX, CX, DX
-    this.stack = new ArrayDeque<>(10);
     this.cpuTimeUsed = 0;
     this.startTime = Instant.now();
     this.openFiles = new ArrayList<>();
@@ -80,23 +77,20 @@ public class ProcessControlBlock {
     this.programCounter++;
   }
 
-  public void pushToStack(int value) throws StackOverflowError {
-    if (stack.size() >= 10) {
-      throw new StackOverflowError("Process stack is full");
-    }
-    stack.push(value);
-  }
-
-  public int popFromStack() throws NoSuchElementException {
-    return stack.pop();
-  }
-
   public void addOpenFile(String fileName) {
     openFiles.add(fileName);
   }
 
   public void removeOpenFile(String fileName) {
     openFiles.remove(fileName);
+  }
+
+  public void setStackPointer(int stackPointer) {
+    this.stackPointer = stackPointer;
+  }
+
+  public int getStackPointer() {
+    return stackPointer;
   }
 
   public ProcessControlBlock getNextPCB() {
@@ -137,10 +131,6 @@ public class ProcessControlBlock {
 
   public int[] getRegisters() {
     return registers;
-  }
-
-  public ArrayDeque<Integer> getStack() {
-    return stack;
   }
 
   public long getCpuTimeUsed() {
@@ -189,10 +179,6 @@ public class ProcessControlBlock {
 
   public void setRegisters(int[] registers) {
     System.arraycopy(registers, 0, this.registers, 0, this.registers.length);
-  }
-
-  public void setStack(ArrayDeque<Integer> stack) {
-    this.stack = stack;
   }
 
   public void setOpenFiles(List<String> openFiles) {

@@ -2,7 +2,7 @@ package itcr.graphics;
 
 import itcr.controllers.FileExplorerController;
 import itcr.controllers.NotepadController;
-import itcr.models.FileInfo;
+import itcr.model.FileInfo;
 
 import javax.swing.*;
 import java.awt.*;
@@ -99,7 +99,6 @@ public class FileExplorer extends FloatingWindow<FileExplorerController> {
   }
 
   private void openNotepad(String fileName, String content) {
-    System.out.println("Opening notepad for file: " + fileName);
     NotepadController notepadController = new NotepadController(controller.getMemoryManager(), this::updateFileList);
     Notepad notepad = new Notepad(parent, notepadController,  fileName, content);
     notepad.setVisible(true);

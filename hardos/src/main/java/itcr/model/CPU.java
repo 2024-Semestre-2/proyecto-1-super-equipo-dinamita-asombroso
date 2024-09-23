@@ -4,8 +4,8 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.HashMap;
-
-import itcr.models.MemoryManager;
+import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 public class CPU {
   private static final int NUM_CORES = 5;
@@ -55,20 +55,13 @@ public class CPU {
 
   public void executeInstruction(int coreId) throws Exception {
     Process process = runningProcesses[coreId];
-    if (process == null) {
-      System.out.println("[" + coreId + "] " + "No process assigned to this core");
-      return;
-    }
 
     String instruction = getNextInstruction(coreId);
-
-    System.out.println("[" + coreId + "] " + "Executing > Instruction: " + instruction);
 
     instructionRegisters[coreId] = instruction;
 
     if (instruction == null) {
       process.updateState(ProcessState.TERMINATED);
-      memory.freeBCP("P" + process.getProcessId());
       dispatcher(coreId);
       return;
     }
@@ -97,6 +90,88 @@ public class CPU {
     instructionHandlers.put(InstructionType.CMP, this::handleCmp);
     instructionHandlers.put(InstructionType.JE, this::handleJe);
     instructionHandlers.put(InstructionType.JNE, this::handleJne);
+    instructionHandlers.put(InstructionType.PARAM, this::handleParam);
+    instructionHandlers.put(InstructionType.PUSH, this::handlePush);
+    instructionHandlers.put(InstructionType.POP, this::handlePop);
+  }
+
+  // Instruction handlers (push, pop, mov, etc.)
+
+  private void handlePush(int coreId, String[] parts) {
+    Process process = runningProcesses[coreId];
+    String processId = "P" + process.getProcessId();
+    ProcessControlBlock pcb = process.getPCB();
+    int currentSP = pcb.getStackPointer();
+
+    if (currentSP >= 4) {
+      throw new IllegalArgumentException("Stack overflow: maximum stack size is 5.");
+    }
+
+    int value = registers[coreId].get(Register.AX);
+
+    if (memory.writeToStack(processId, currentSP + 1, value)) {
+      pcb.setStackPointer(currentSP + 1);
+    } else {
+      throw new IllegalArgumentException("Failed to push value to stack for process " + processId);
+    }
+  }
+
+  private void handlePop(int coreId, String[] parts) {
+    if (parts.length != 2) {
+      throw new IllegalArgumentException("POP instruction requires a register argument.");
+    }
+
+    Register targetRegister;
+    try {
+      targetRegister = Register.valueOf(parts[1].toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Invalid register: " + parts[1]);
+    }
+
+    Process process = runningProcesses[coreId];
+    String processId = "P" + process.getProcessId();
+    ProcessControlBlock pcb = process.getPCB();
+    int currentSP = pcb.getStackPointer();
+
+    if (currentSP < 0) {
+      throw new IllegalArgumentException("Stack underflow: stack is empty.");
+    }
+
+    int value = memory.popFromStack(processId, currentSP);
+    registers[coreId].put(targetRegister, value);
+    pcb.setStackPointer(currentSP - 1);
+  }
+
+  private void handleParam(int coreId, String[] parts) {
+    String[] cleanParts = Arrays.stream(parts)
+        .map(part -> part.replace(",", "").trim())
+        .toArray(String[]::new);
+
+    if (cleanParts.length < 2 || cleanParts.length > 4) {
+      throw new IllegalArgumentException("PARAM instruction requires 1 to 3 parameters.");
+    }
+
+    Process process = runningProcesses[coreId];
+    String processId = "P" + process.getProcessId();
+    ProcessControlBlock pcb = process.getPCB();
+    int currentSP = pcb.getStackPointer();
+
+    for (int i = 1; i < cleanParts.length; i++) {
+      try {
+        int value = Integer.parseInt(cleanParts[i]);
+        if (currentSP >= 4) {
+          throw new IllegalArgumentException("Stack overflow: maximum stack size is 5.");
+        }
+        if (memory.writeToStack(processId, currentSP + 1, value)) {
+          currentSP++;
+          pcb.setStackPointer(currentSP);
+        } else {
+          throw new IllegalArgumentException("Failed to write parameter to stack for process " + processId);
+        }
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Parameter must be a valid 32-bit integer", e);
+      }
+    }
   }
 
   private void handleJe(int coreId, String[] parts) {
@@ -117,14 +192,17 @@ public class CPU {
     int val1 = registers[coreId].get(reg1);
     int val2 = registers[coreId].get(reg2);
     zeroFlag = false;
-    if (val1 == val2) {zeroFlag = true;}
-    else {zeroFlag = false;}
+    if (val1 == val2) {
+      zeroFlag = true;
+    } else {
+      zeroFlag = false;
+    }
   }
 
   private void handleJmp(int coreId, String[] parts) {
     Process currentP = runningProcesses[coreId];
 
-    int topIndex = currentP.getInstructions().size();
+    int topIndex = currentP.getQtyInstructions();
     int currentIndex = currentP.getCurrentInstructionIndex() - 1;
     int val = Integer.valueOf(parts[1]);
 
@@ -211,14 +289,167 @@ public class CPU {
   private void handleInterrupt(int coreId, String[] parts) {
     InterruptCode code = InterruptCode.valueOf(parts[1]);
     Process process = runningProcesses[coreId];
+    String prefixMsg = "[ Core " + coreId + " ] >> ";
+    String message = "";
     switch (code) {
-      case _20H:
-        process.updateState(ProcessState.TERMINATED);
-        memory.freeBCP("P" + process.getProcessId());
+      case _21H: // file management
+        int ax_value = registers[coreId].get(Register.AX);
+        int bx_value = registers[coreId].get(Register.BX);
+        int cx_value = registers[coreId].get(Register.CX);
+
+        String fileName = memory.getString(bx_value);
+        String content = memory.getString(cx_value);
+
+        // depends on the value of ax the type of file management
+        // 0: create file, 1: open file, 2: read file, 3: write file, 4: close file
+
+        // on the value of bx, is the name of the file (used for all the operations)
+
+        // on the value of cx, is the content of the file (used for write file)
+
+        switch (ax_value) {
+          case 0:
+            // create file
+            message = prefixMsg + "File " + fileName + " created";
+
+            memory.createFile(fileName);
+            break;
+
+          case 1:
+
+            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+              message = prefixMsg + "File " + fileName + " is already opened by another process";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+              break;
+            }
+
+            // open file
+            message = prefixMsg + "File " + fileName + " opened";
+            String existingFile = memory.getFile(fileName);
+            if (existingFile == null) {
+              message = prefixMsg + "File " + fileName + " does not exist";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+              break;
+            }
+            process.getPCB().getOpenFiles().add(fileName);
+            break;
+          case 2:
+
+            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+              message = prefixMsg + "File " + fileName + " is already opened by another process";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+              break;
+            }
+
+            // read file
+            message = prefixMsg + "File " + fileName + " read";
+            // just print the content of the file
+            String fileContent = memory.getFile(fileName);
+            if (fileContent == null) {
+              message = prefixMsg + "File " + fileName + " does not exist";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+              break;
+            }
+            message = prefixMsg + "File " + fileName + " content: " + fileContent;
+            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+          case 3:
+            
+            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+              message = prefixMsg + "File " + fileName + " is already opened by another process";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+              break;
+            }
+
+            // write file
+            message = prefixMsg + "File " + fileName + " written";
+            if (memory.storeFile(fileName, content)) {
+              message = prefixMsg + "File " + fileName + " written";
+            } else {
+              message = prefixMsg + "File " + fileName + " not stored";
+            }
+
+            break;
+          case 4:
+            // close file
+            message = prefixMsg + "File " + fileName + " closed";
+            process.getPCB().getOpenFiles().remove(fileName);
+            break;
+
+          default:
+            break;
+        }
         break;
-      case _10H:
-        System.out.println("10H interrupt called");
+      case _20H: // terminates process
+        process.updateState(ProcessState.TERMINATED);
+        message = prefixMsg + "Process " + process.getProcessId() + " terminated";
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+        break;
+      case _10H: // prints dx
+        int dx = registers[coreId].get(Register.DX);
+        message = prefixMsg + "DX = " + dx;
+        InterruptQueue.addMessage(new InterruptMessage(coreId, code, message, process.getProcessId()));
+        break;
+      case _09H: // input of a number between 0 and 255
+
+        // send message to console
+        message = prefixMsg + "Input requested";
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+
+        InterruptQueue.addMessage(new InterruptMessage(coreId, code, "Input requested", process.getProcessId()));
+        process.updateState(ProcessState.WAITING);
+        CompletableFuture<String> inputFuture = UserInputHandler.requestInput(process.getProcessId());
+        inputFuture.thenAccept(input -> {
+          
+          // prints that the input was received
+          try {
+            int inputInt = Integer.parseInt(input);
+            if (inputInt < 0 || inputInt > 255) {
+              String msg = prefixMsg + "The input must be a number between 0 and 255";
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
+            }
+            else {
+              String msg = prefixMsg + "Input received: " + input;
+              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
+              registers[coreId].put(Register.DX, inputInt);
+            }
+          } catch (NumberFormatException e) {
+            String msg = prefixMsg + "Invalid input";
+            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
+          }
+          process.updateState(ProcessState.READY);
+        });
+        break;
+      
+      case _08H:
+        // input of a string
+        message = prefixMsg + "Input requested";
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+
+        InterruptQueue.addMessage(new InterruptMessage(coreId, code, "Input requested", process.getProcessId()));
+        process.updateState(ProcessState.WAITING);
+        CompletableFuture<String> inputFutureString = UserInputHandler.requestInput(process.getProcessId());
+        inputFutureString.thenAccept(input -> {
+          String msg = prefixMsg + "Input received: " + input;
+          InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
+
+          int storedAddr = memory.storeString(input);
+          registers[coreId].put(Register.BX, storedAddr);
+          process.updateState(ProcessState.READY);
+        });
+        break;
     }
+  }
+
+  private boolean fileOpenedByOtherProcess(String fileName, int processId) {
+    for (int i = 0; i < NUM_CORES; i++) {
+      if (runningProcesses[i] != null && runningProcesses[i].getProcessId() != processId) {
+        ProcessControlBlock pcb = runningProcesses[i].getPCB();
+        if (pcb.getOpenFiles().contains(fileName)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private void updateFlags(int result) {
@@ -272,8 +503,15 @@ public class CPU {
     if (index >= 0 && index < NUM_CORES) {
       Process currentProcess = runningProcesses[index];
       String id = "P" + currentProcess.getProcessId();
-      System.out.println("Dispatcher: Terminating process " + id);
-      memory.deallocateMemory(id);
+      if (!memory.deallocateMemory(id)) {
+        System.out.println("Error deallocating memory for process " + id);
+      }
+      if (!memory.deleteBCP(id + "_bcp")) {
+        System.out.println("Error freeing BCP for process " + id);
+      }
+      if (!memory.deallocateStack(id)) {
+        System.out.println("Error deallocating stack for process " + id);
+      }
       runningProcesses[index] = null;
       resetRegister(index);
     } else {
@@ -285,19 +523,15 @@ public class CPU {
     return str.matches("-?\\d+(\\.\\d+)?");
   }
 
-  private enum InstructionType {
-    LOAD, STORE, MOV, ADD, SUB, INT, INC, DEC, SWAP, JMP, CMP, JE, JNE
-  }
-
-  private enum InterruptCode {
-    _20H, _10H
-  }
-
   private String getNextInstruction(int coreId) {
     Process CurrentProcess = runningProcesses[coreId];
     String id = "P" + CurrentProcess.getProcessId();
     String res = memory.getInstruction(id, CurrentProcess.getCurrentInstructionIndex());
     CurrentProcess.setCurrentInstructionIndex(CurrentProcess.getCurrentInstructionIndex() + 1);
     return res;
+  }
+
+  private enum InstructionType {
+    LOAD, STORE, MOV, ADD, SUB, INT, INC, DEC, SWAP, JMP, CMP, JE, JNE, PARAM, PUSH, POP
   }
 }

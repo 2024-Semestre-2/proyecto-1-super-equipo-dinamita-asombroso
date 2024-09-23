@@ -1,8 +1,9 @@
 package itcr.controllers;
 
-import itcr.models.MemoryManager;
-import itcr.models.FileInfo;
 import itcr.graphics.FileExplorer;
+import itcr.model.FileInfo;
+import itcr.model.MemoryManager;
+
 import java.util.List;
 
 public class FileExplorerController {
@@ -43,10 +44,8 @@ public class FileExplorerController {
       if (fileExplorer != null) {
         fileExplorer.updateFileList();
       }
-      System.out.println("Archivo guardado exitosamente");
       return true;
     } else {
-      System.out.println("No se pudo guardar el archivo");
       return false;
     }
   }

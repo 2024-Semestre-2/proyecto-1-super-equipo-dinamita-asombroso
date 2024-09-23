@@ -25,6 +25,7 @@ public class DesktopScreen extends JPanel {
     addDesktopIcon("Mi PC", "xp_home_mypc_icon.png", 25, 25, backgroundLabel, "MyComputer");
     addDesktopIcon("Recicle bin", "xp_home_reciclebin_icon.png", 25, 125, backgroundLabel, "RecycleBin");
     addDesktopIcon("File explorer", "xp_home_fileexplorer_icon.png", 25, 225, backgroundLabel, "FileExplorer");
+    addDesktopIcon("Hard8086", "xp_home_hard8086.png", 25, 325, backgroundLabel, "Hard8086");
   }
 
   private void addDesktopIcon(String name, String iconPath, int x, int y, JLabel backgroundLabel,
@@ -68,6 +69,9 @@ public class DesktopScreen extends JPanel {
         break;
       case "FileExplorer":
         controller.openFileExplorer();
+        break;
+      case "Hard8086":
+        controller.openHard8086();
         break;
       default:
         JOptionPane.showMessageDialog(null, "Acción no definida");

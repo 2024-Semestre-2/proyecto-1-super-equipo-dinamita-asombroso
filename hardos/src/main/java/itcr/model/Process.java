@@ -5,45 +5,38 @@ import java.util.ArrayList;
 
 public class Process {
   private ProcessControlBlock pcb;
-  private List<String> instructions;
   private int currentInstructionIndex;
   public static int processCounter = 0;
   private List<Process> children;
   private Process parent;
   private int exitCode;
+  private int qtyInstructions;
 
-  public Process(List<String> instructions) {
-    this.instructions = new ArrayList<>(instructions);
+  public Process(int qtyInstructions) {
     this.currentInstructionIndex = 0;
     this.children = new ArrayList<>();
     this.exitCode = -1;
+    this.qtyInstructions = qtyInstructions;
   }
 
   public Process(ProcessControlBlock pcb) {
     this.pcb = pcb;
-    this.instructions = new ArrayList<>();
     this.currentInstructionIndex = 0;
     this.children = new ArrayList<>();
     this.exitCode = -1;
   }
 
-  public String getNextInstruction() {
-    if (hasMoreInstructions()) {
-      String instruction = instructions.get(currentInstructionIndex);
-      currentInstructionIndex++;
-      pcb.incrementProgramCounter();
-      return instruction;
-    }
-    return null;
+  public int getQtyInstructions() {
+    return this.qtyInstructions;
+  }
+
+  public void setQtyInstructions(int qtyInstructions) {
+    this.qtyInstructions = qtyInstructions;
   }
 
   public void resetInstructionPointer() {
     currentInstructionIndex = 0;
     pcb.setProgramCounter(0);
-  }
-
-  public boolean hasMoreInstructions() {
-    return currentInstructionIndex < instructions.size();
   }
 
   public ProcessControlBlock getPCB() {
@@ -75,18 +68,6 @@ public class Process {
     } else {
       throw new IndexOutOfBoundsException("Invalid register index");
     }
-  }
-
-  public void pushToStack(int value) {
-    pcb.pushToStack(value);
-  }
-
-  public int popFromStack() {
-    return pcb.popFromStack();
-  }
-
-  public List<String> getInstructions() {
-    return new ArrayList<>(instructions);
   }
 
   public void addChild(Process child) {

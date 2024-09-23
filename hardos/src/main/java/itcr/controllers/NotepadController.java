@@ -1,6 +1,6 @@
 package itcr.controllers;
 
-import itcr.models.MemoryManager;
+import itcr.model.MemoryManager;
 
 public class NotepadController {
   private MemoryManager memoryManager;

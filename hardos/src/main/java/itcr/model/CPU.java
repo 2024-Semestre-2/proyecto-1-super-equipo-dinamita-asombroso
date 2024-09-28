@@ -402,6 +402,14 @@ public class CPU {
             process.getPCB().getOpenFiles().remove(fileName);
             memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
             break;
+          case 5:
+            // delete file
+            message = prefixMsg + "File " + fileName + " Deleted";
+            process.getPCB().getOpenFiles().remove(fileName);
+            memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
+            memory.freeFile(fileName);
+            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+            break;
 
           default:
             break;

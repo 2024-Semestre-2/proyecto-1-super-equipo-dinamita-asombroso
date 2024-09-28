@@ -15,8 +15,8 @@ import javax.swing.JOptionPane;
  */
 public class DesktopScreenController {
   private final JFrame parent;
-  private final MemoryManager memoryManager;
-  private final Scheduler scheduler;
+  private MemoryManager memoryManager;
+  private Scheduler scheduler;
 
   /**
    * Constructs a DesktopScreenController with the specified parent JFrame.
@@ -93,6 +93,7 @@ public class DesktopScreenController {
    */
   public void openHard8086() {
     Hard8086 hard8086 = new Hard8086(parent, scheduler);
+    hard8086.desktopScreenControllerRef = this;
     hard8086.setVisible(true);
   }
 
@@ -172,5 +173,10 @@ public class DesktopScreenController {
 
   public void setVirtualMemorySize(int virtualMemorySize) {
     memoryManager.setVirtualMemorySize(virtualMemorySize);
+  }
+
+  public void changeScheduler (Scheduler scheduler) {
+    this.scheduler = scheduler;
+    this.memoryManager = scheduler.cpu.memory;
   }
 }

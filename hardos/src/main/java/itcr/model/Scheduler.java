@@ -120,19 +120,10 @@ public class Scheduler {
     for (int i = 0; i < cpu.getNumCores(); i++) {
       final int coreId = i;
       threads[i] = new Thread(() -> {
-        String lastBcpJson = "";
-        boolean bcpsPrinted = false;
         try {
           Process process = cpu.getRunningProcess(coreId);
           if (process != null) {
             String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
-
-            //System.out.println("BCP: " + bcpJson);
-            if (!bcpsPrinted) {
-              memoryManager.printAllBCPs();
-              bcpsPrinted = true;
-            }
-            lastBcpJson = bcpJson;
 
             ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
             if (pcb != null) {
@@ -148,7 +139,6 @@ public class Scheduler {
           }
         } catch (Exception e) {
           e.printStackTrace();
-          System.out.println("Last BCP: " + lastBcpJson);
         }
       });
       threads[i].start();
@@ -198,15 +188,12 @@ public class Scheduler {
     waitingQueue.clear();
     cpu.fullReset();
 
-    // print all files
-    System.out.println("Files in memory:");
     for (String filename : memoryManager.getFiles()) {
-      System.out.println("File: " + filename);
       String fileContent = memoryManager.getFile(filename);
       if (cpu.memory.storeFile(filename, fileContent)) {
         System.out.println("File re-stored successfully");
       } else {
-        System.out.println("Error storing file");
+        System.out.println("Error re-storing file");
       }
     }
 

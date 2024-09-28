@@ -62,6 +62,11 @@ public class FileLoaderDialog extends JDialog {
 
     // Buttons panel
     JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+
+    // "Select All" button
+    JButton selectAllButton = new JButton("Select All");
+    selectAllButton.addActionListener(e -> toggleSelectAllFiles());
+
     JButton okButton = new JButton("OK");
     okButton.addActionListener(e -> {
       updateSelectedFiles();
@@ -70,6 +75,7 @@ public class FileLoaderDialog extends JDialog {
     JButton cancelButton = new JButton("Cancel");
     cancelButton.addActionListener(e -> dispose());
 
+    buttonsPanel.add(selectAllButton);
     buttonsPanel.add(okButton);
     buttonsPanel.add(cancelButton);
     add(buttonsPanel, BorderLayout.SOUTH);
@@ -87,6 +93,14 @@ public class FileLoaderDialog extends JDialog {
         selectedFiles.add(checkBox.getText());
       }
     }
+  }
+
+  private void toggleSelectAllFiles() {
+    boolean selectAll = fileCheckboxes.stream().anyMatch(cb -> !cb.isSelected());
+    for (JCheckBox checkBox : fileCheckboxes) {
+      checkBox.setSelected(selectAll);
+    }
+    updateSelectedFiles();
   }
 
   public List<String> getSelectedFiles() {

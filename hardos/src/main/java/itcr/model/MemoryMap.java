@@ -23,15 +23,18 @@ public class MemoryMap {
   public MemorySection kernel;
   public MemorySection os;
   public MemorySection userSpace;
+  public MemorySection secondaryStorage;
   public List<MemorySection> allocatedProcesses;
   public List<MemorySection> freeSpaces;
   public List<MemorySection> allocatedStacks;
   public List<MemorySection> storedStrings;
+  public List<MemorySection> storedFiles;
 
   public MemoryMap() {
     allocatedProcesses = new ArrayList<>();
     freeSpaces = new ArrayList<>();
     allocatedStacks = new ArrayList<>();
     storedStrings = new ArrayList<>();
+    storedFiles = new ArrayList<>();
   }
 }

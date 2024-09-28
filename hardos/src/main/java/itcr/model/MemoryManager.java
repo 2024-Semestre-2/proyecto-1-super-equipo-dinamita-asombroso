@@ -154,31 +154,6 @@ public class MemoryManager {
     }
   }
 
-  // public void printAllStrings() {
-  //   System.out.println("=== Stored Strings ===");
-  //   if (stringAllocations.isEmpty()) {
-  //     System.out.println("No strings stored in memory.");
-  //   } else {
-  //     for (Map.Entry<Integer, StringAllocation> entry : stringAllocations.entrySet()) {
-  //       int address = entry.getKey();
-  //       StringAllocation allocation = entry.getValue();
-  //       String storedString = getString(address);
-  //       System.out.printf("Address: %d, Length: %d, Content: \"%s\"%n",
-  //           address, allocation.length, storedString);
-  //     }
-  //   }
-  //   System.out.println("=== Free String Spaces ===");
-  //   if (freeStringSpaces.isEmpty()) {
-  //     System.out.println("No free spaces for strings.");
-  //   } else {
-  //     for (MemoryAllocation freeSpace : freeStringSpaces) {
-  //       System.out.printf("Start: %d, Size: %d bytes%n",
-  //           freeSpace.startIndex, freeSpace.size);
-  //     }
-  //   }
-  //   System.out.println("========================");
-  // }
-
   // Main memory management methods
 
   // Allocating memory for a process
@@ -209,7 +184,7 @@ public class MemoryManager {
     }
     return -1;
   }
-  
+
   public synchronized boolean deallocateMemory(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName);
     if (allocation != null) {
@@ -289,13 +264,6 @@ public class MemoryManager {
   public boolean writeToStack(String processId, int index, int value) {
     StackAllocation stackAllocation = stackAllocations.get(processId);
     if (stackAllocation == null || index < 0 || index >= STACK_ENTRIES) {
-      if (stackAllocation == null) {
-        System.out.println("xxx err stackAllocation null");
-      }
-      if (index < 0 || index >= STACK_ENTRIES) {
-        System.out.println("xxx err index out of bounds");
-      }
-      System.out.println("xxx err 1");
       return false;
     }
 
@@ -321,13 +289,6 @@ public class MemoryManager {
 
     return true;
   }
-
-  // public void printStackKeyAllocations() {
-  //   System.out.println("Stack Key Allocations:");
-  //   for (Map.Entry<String, StackAllocation> entry : stackAllocations.entrySet()) {
-  //     System.out.println(entry.getKey() + ": " + entry.getValue().startIndex);
-  //   }
-  // }
 
   public int popFromStack(String processId, int index) {
     int value = readFromStack(processId, index);
@@ -356,18 +317,6 @@ public class MemoryManager {
     return isNegative ? -value : value;
   }
 
-  // public void printStacks() {
-  //   for (Map.Entry<String, StackAllocation> entry : stackAllocations.entrySet()) {
-  //     StackAllocation stackAllocation = entry.getValue();
-  //     System.out.println("Stack for process " + entry.getKey() + ":");
-  //     for (int i = 0; i < STACK_ENTRIES; i++) {
-  //       int byteIndex = stackAllocation.startIndex + (i * 4);
-  //       int value = readFromStack(entry.getKey(), i);
-  //       System.out.println(i + ": " + value + " | Bytes: " + byteIndex + " - " + (byteIndex + 3));
-  //     }
-  //   }
-  // }
-
   // return in a string the main memory map (processes, instructions, and stack)
   public MemoryMap getMainMemoryMap() {
     MemoryMap map = new MemoryMap();
@@ -375,6 +324,9 @@ public class MemoryManager {
     map.kernel = new MemoryMap.MemorySection("Kernel Space", 0, kernelSize * KB - 1, null);
     map.os = new MemoryMap.MemorySection("OS Space", kernelSize * KB, userSpaceStart - 1, null);
     map.userSpace = new MemoryMap.MemorySection("User Space", userSpaceStart, mainMemorySize * KB - 1, null);
+
+    map.secondaryStorage = new MemoryMap.MemorySection("Secondary Storage", 0, secondaryMemorySize * KB - 1,
+        String.format("Size: %d KB", secondaryMemorySize));
 
     for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
       MemoryAllocation allocation = entry.getValue();
@@ -431,6 +383,26 @@ public class MemoryManager {
           String.format("Value: \"%s\"", storedString)));
     }
 
+    for (Map.Entry<String, FileInfo> entry : secondaryStorageIndex.entrySet()) {
+      String fileName = entry.getKey();
+      FileInfo fileInfo = entry.getValue();
+      String fileContent = getFile(fileName); // Obtener el contenido del archivo
+
+      String escapedContent = fileContent
+          .replace("\\", "\\\\")
+          .replace("\n", "\\n")
+          .replace("\r", "\\r")
+          .replace("\t", "\\t");
+
+      MemoryMap.MemorySection fileSection = new MemoryMap.MemorySection(
+          fileName,
+          fileInfo.startIndex,
+          fileInfo.startIndex + fileInfo.size - 1,
+          String.format("Size: %d bytes, Content: \"%s\"", fileInfo.size, escapedContent));
+
+      map.storedFiles.add(fileSection);
+    }
+
     return map;
   }
 
@@ -477,21 +449,6 @@ public class MemoryManager {
 
     return true;
   }
-
-  // public void printInstructions(String processId) {
-  //   List<InstructionIndex> indices = processInstructionIndices.get(processId);
-  //   if (indices == null) {
-  //     System.out.println("No instructions stored for process " + processId);
-  //   } else {
-  //     System.out.println("Instructions for process " + processId + ":");
-  //     for (int i = 0; i < indices.size(); i++) {
-  //       InstructionIndex instructionIndex = indices.get(i);
-  //       byte[] instructionBytes = new byte[instructionIndex.length];
-  //       System.arraycopy(mainMemory, instructionIndex.startIndex, instructionBytes, 0, instructionIndex.length);
-  //       System.out.println(i + ": " + new String(instructionBytes));
-  //     }
-  //   }
-  // }
 
   public String getInstruction(String processName, int index) {
     List<InstructionIndex> indices = processInstructionIndices.get(processName);
@@ -541,7 +498,8 @@ public class MemoryManager {
     return false;
   }
 
-  // delete BCP from main memory (os space) and free the space (suffix _bcp) using deallocateOSSpace
+  // delete BCP from main memory (os space) and free the space (suffix _bcp) using
+  // deallocateOSSpace
   public synchronized boolean deleteBCP(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName + "");
     if (allocation != null) {
@@ -551,23 +509,8 @@ public class MemoryManager {
     return false;
   }
 
-  public synchronized void printAllBCPs() {
-    System.out.println("=== Stored BCPs ===");
-    if (mainMemoryIndex.isEmpty()) {
-      System.out.println("No BCPs stored in main memory.");
-    } else {
-      for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
-        String processName = entry.getKey();
-        MemoryAllocation allocation = entry.getValue();
-        String bcpContent = getBCP(processName);
-        System.out.printf("Process: %s, Size: %d bytes, Content: \"%s\"%n",
-            processName, allocation.size, bcpContent);
-      }
-    }
-    System.out.println("====================");
-  }
-
-  // updates and existing BCP in main memory (os space), checks if the new BCP fits in the same space or needs to be moved
+  // updates and existing BCP in main memory (os space), checks if the new BCP
+  // fits in the same space or needs to be moved
   public synchronized boolean updateBCP(String processName, String bcpString) {
     MemoryAllocation allocation = mainMemoryIndex.get(processName + "_bcp");
     if (allocation != null) {
@@ -637,22 +580,6 @@ public class MemoryManager {
     }
     return fileList;
   }
-
-  // public void printAllFiles() {
-  //   System.out.println("=== Stored Files ===");
-  //   if (secondaryStorageIndex.isEmpty()) {
-  //     System.out.println("No files stored in secondary memory.");
-  //   } else {
-  //     for (Map.Entry<String, FileInfo> entry : secondaryStorageIndex.entrySet()) {
-  //       String fileName = entry.getKey();
-  //       FileInfo fileInfo = entry.getValue();
-  //       String fileContent = getFile(fileName);
-  //       System.out.printf("File: %s, Size: %d bytes, Content: \"%s\"%n",
-  //           fileName, fileInfo.size, fileContent);
-  //     }
-  //   }
-  //   System.out.println("====================");
-  // }
 
   // Auxiliary methods for memory management
 
@@ -824,39 +751,6 @@ public class MemoryManager {
     Node node = nodeList.item(0);
     return node.getNodeValue();
   }
-
-  // borrar jeje
-
-  // public void printMemoryMap() {
-  //   System.out.println("Memory Map:");
-  //   System.out.println("Kernel Space: 0 - " + (kernelSize * KB - 1));
-  //   System.out.println("OS Space: " + (kernelSize * KB) + " - " + (userSpaceStart - 1));
-  //   System.out.println("User Space: " + userSpaceStart + " - " + (mainMemorySize * KB - 1));
-  //   System.out.println("\nAllocated Processes:");
-  //   for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
-  //     MemoryAllocation allocation = entry.getValue();
-  //     System.out.println(
-  //         entry.getKey() + ": " + allocation.startIndex + " - " + (allocation.startIndex + allocation.size - 1));
-  //   }
-  //   System.out.println("\nFree Spaces:");
-  //   for (MemoryAllocation freeSpace : freeSpaces) {
-  //     System.out.println(freeSpace.startIndex + " - " + (freeSpace.startIndex + freeSpace.size - 1));
-  //   }
-  // }
-
-  // public void printAllBCPs() {
-  //   // Print all BCPs and their positions of bytes in mainMemory
-  //   for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
-  //     String processName = entry.getKey();
-  //     if (processName.endsWith("_bcp")) {
-  //       MemoryAllocation allocation = entry.getValue();
-  //       byte[] bcpBytes = new byte[allocation.size];
-  //       System.arraycopy(mainMemory, allocation.startIndex, bcpBytes, 0, allocation.size);
-  //       System.out.println("BCP for process " + processName + ": " + new String(bcpBytes) + " | Bytes: "
-  //           + allocation.startIndex + " - " + (allocation.startIndex + allocation.size - 1));
-  //     }
-  //   }
-  // }
 
   // Accesors
 

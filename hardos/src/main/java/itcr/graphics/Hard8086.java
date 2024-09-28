@@ -1,5 +1,6 @@
 package itcr.graphics;
 
+import itcr.controllers.DesktopScreenController;
 import itcr.model.*;
 
 import javax.swing.*;
@@ -21,7 +22,8 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private JTree memoryMapTree;
   private ExecutorService interruptExecutor;
   private final int NUM_CORES = 5;
-  private boolean firstStep = true; 
+  private boolean firstStep = true;
+  public DesktopScreenController desktopScreenControllerRef = null;
 
   private JTextArea[] coreLabels;
 
@@ -139,6 +141,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     addMemorySection(root, memoryMap.kernel);
     addMemorySection(root, memoryMap.os);
     addMemorySection(root, memoryMap.userSpace);
+    addMemorySection(root, memoryMap.secondaryStorage);
 
     DefaultMutableTreeNode processesNode = new DefaultMutableTreeNode("Allocated Processes");
     for (MemoryMap.MemorySection process : memoryMap.allocatedProcesses) {
@@ -163,6 +166,12 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
       addMemorySection(stringsNode, string);
     }
     root.add(stringsNode);
+
+    DefaultMutableTreeNode filesNode = new DefaultMutableTreeNode("Stored Files");
+    for (MemoryMap.MemorySection file : memoryMap.storedFiles) {
+      addMemorySection(filesNode, file);
+    }
+    root.add(filesNode);
 
     memoryMapTree.setModel(new DefaultTreeModel(root));
     expandAllNodes(memoryMapTree, 0, -1);
@@ -341,6 +350,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   public void dispose() {
     interruptExecutor.shutdownNow();
     controller.reset();
+    desktopScreenControllerRef.changeScheduler(controller);
     super.dispose();
   }
 }

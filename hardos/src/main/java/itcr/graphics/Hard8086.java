@@ -21,6 +21,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private JTree memoryMapTree;
   private ExecutorService interruptExecutor;
   private final int NUM_CORES = 5;
+  private boolean firstStep = true; 
+
+  private JTextArea[] coreLabels;
 
   public Hard8086(JFrame parent, Scheduler scheduler) {
     super(parent, "Hard8086 Simulator", scheduler);
@@ -38,16 +41,17 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     JPanel mainPanel = createMainTab();
     tabbedPane.addTab("Main", mainPanel);
 
-    // Assembler Tab
-    JPanel assemblerPanel = new JPanel();
-    assemblerPanel.add(new JLabel("Assembler Tab"));
-    tabbedPane.addTab("Assembler", assemblerPanel);
 
-    // Stats Tab
     JPanel statsPanel = new JPanel();
-    statsPanel.add(new JLabel("Stats Tab"));
+    statsPanel.setLayout(new GridLayout(NUM_CORES, 1)); 
+    
+    this.coreLabels = new JTextArea[NUM_CORES];
+    for (int i = 0; i < NUM_CORES; i++) {
+        coreLabels[i] = new JTextArea("");
+        statsPanel.add(coreLabels[i]);
+    }
     tabbedPane.addTab("Stats", statsPanel);
-
+    
     add(tabbedPane, BorderLayout.CENTER);
   }
 
@@ -127,6 +131,8 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     return mainPanel;
   }
 
+
+
   private void updateMemoryMap(ActionEvent e) {
     MemoryMap memoryMap = controller.getMemoryManager().getMainMemoryMap();
     DefaultMutableTreeNode root = new DefaultMutableTreeNode("Memory");
@@ -190,6 +196,8 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
       for (String fileName : selectedFiles) {
         // TODO: assembler validation
         String strInstructions = controller.getFileContent(fileName);
+        if (!Assembler.validateFormat(strInstructions)) {System.out.println("Error:___");continue;}
+
         // Separate instructions by line
         String[] instructions = strInstructions.split("\n");
 
@@ -232,7 +240,6 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     if (!controller.getMemoryManager().allocateStack(processId)) {
       System.out.println("xx >>> Error allocating stack");
     }
-    controller.getMemoryManager().writeToStack(processId, 0, 200);
 
     return process;
   }
@@ -267,9 +274,11 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   }
 
   private void executeAllInstructions(ActionEvent e) {
+
     try {
       while (controller.hasMoreInstructions()) {
         controller.executeInstruction();
+        Thread.sleep(1000);
         updateRegistersDisplay();
       }
       consoleArea.append("All instructions executed\n");
@@ -281,11 +290,11 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private void executeNextInstruction(ActionEvent e) {
     try {
       if (true) {
-        System.out.println("1 Executing next instruction");
+        if(firstStep) {this.firstStep = false; controller.executeInstruction();}
         controller.executeInstruction();
         updateRegistersDisplay();
         updateMemoryMap(e);
-
+        updateCoreLabels();
       } else {
         consoleArea.append("No more instructions to execute\n");
       }
@@ -301,7 +310,13 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private void updateRegistersDisplay() {
     for (int i = 0; i < NUM_CORES; i++) {
       JTextArea area = registersAreas.get(i);
-      area.setText(controller.getRegisters(i));
+      area.setText(controller.getRegisters(i) + "\n" + controller.getRegisters(0,i));
+    }
+  }
+
+  private void updateCoreLabels() {
+    for (int i = 0; i < NUM_CORES; i++) {
+        coreLabels[i].setText(controller.getCoreStatus(i));
     }
   }
 

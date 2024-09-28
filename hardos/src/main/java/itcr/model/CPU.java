@@ -4,8 +4,10 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.HashMap;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import itcr.model.ProcessState;
 
 public class CPU {
   private static final int NUM_CORES = 5;
@@ -55,22 +57,24 @@ public class CPU {
 
   public void executeInstruction(int coreId) throws Exception {
     Process process = runningProcesses[coreId];
-
     String instruction = getNextInstruction(coreId);
-
     instructionRegisters[coreId] = instruction;
-
     if (instruction == null) {
       process.updateState(ProcessState.TERMINATED);
       dispatcher(coreId);
       return;
     }
-
     String[] parts = instruction.split(" ");
     InstructionType type = InstructionType.valueOf(parts[0]);
-
     instructionHandlers.get(type).accept(coreId, parts);
     process.getPCB().incrementProgramCounter();
+    process.getPCB().getStartTime();
+    
+
+    process.getPCB().setlastStateChangeTime();
+    process.getPCB().updateCpuTimeUsed();
+
+    memory.storeBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
     saveProcessContext(coreId);
   }
 
@@ -104,7 +108,9 @@ public class CPU {
     int currentSP = pcb.getStackPointer();
 
     if (currentSP >= 4) {
-      throw new IllegalArgumentException("Stack overflow: maximum stack size is 5.");
+      String message  = "Stack overflow: maximum stack size is 5.";
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+      return;
     }
 
     int value = registers[coreId].get(Register.AX);
@@ -332,6 +338,7 @@ public class CPU {
               break;
             }
             process.getPCB().getOpenFiles().add(fileName);
+            memory.storeBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
             break;
           case 2:
 
@@ -373,6 +380,7 @@ public class CPU {
             // close file
             message = prefixMsg + "File " + fileName + " closed";
             process.getPCB().getOpenFiles().remove(fileName);
+            memory.storeBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
             break;
 
           default:
@@ -381,8 +389,8 @@ public class CPU {
         break;
       case _20H: // terminates process
         process.updateState(ProcessState.TERMINATED);
-        message = prefixMsg + "Process " + process.getProcessId() + " terminated";
-        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+        memory.storeBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, getStats(process.getProcessId()), process.getProcessId()));
         break;
       case _10H: // prints dx
         int dx = registers[coreId].get(Register.DX);
@@ -417,6 +425,7 @@ public class CPU {
             InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
           }
           process.updateState(ProcessState.READY);
+          memory.storeBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
         });
         break;
       
@@ -434,7 +443,8 @@ public class CPU {
 
           int storedAddr = memory.storeString(input);
           registers[coreId].put(Register.BX, storedAddr);
-          process.updateState(ProcessState.READY);
+          process.updateState(ProcessState.RUNNING);
+          memory.storeBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
         });
         break;
     }
@@ -458,7 +468,8 @@ public class CPU {
   }
 
   public void handleIOCompletion(Process process) {
-    process.updateState(ProcessState.READY);
+    process.updateState(ProcessState.RUNNING);
+    memory.storeBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
   }
 
   public boolean isCoreAvailable(int coreId) {
@@ -499,9 +510,25 @@ public class CPU {
     return sb.toString();
   }
 
+  public String getStats(int index) {
+    Process currentProcess = runningProcesses[index];
+    if(currentProcess == null) return "";
+    String prefixMsg = "[ Core " + index + " ] >> ";
+    int res = currentProcess.getPCB().getTurnaroundTime();
+    String time_result = res/1000 + "." +res%1000;
+    String message = prefixMsg + "Info:   \nStart time: " + currentProcess.getPCB().getStartTime() + " \nFinish time: "+ Instant.now() + "\nTotal core usage time: " + time_result + "S";
+    return message;
+  }
+
+  public String getCoreStatus(int id) {
+    return getStats(id);
+  }
+
   public void dispatcher(int index) {
     if (index >= 0 && index < NUM_CORES) {
       Process currentProcess = runningProcesses[index];
+      currentProcess.getPCB().updateState(ProcessState.TERMINATED);
+      memory.storeBCP("P" + currentProcess.getProcessId(), currentProcess.getPCB().toJsonString());
       String id = "P" + currentProcess.getProcessId();
       if (!memory.deallocateMemory(id)) {
         System.out.println("Error deallocating memory for process " + id);
@@ -512,6 +539,9 @@ public class CPU {
       if (!memory.deallocateStack(id)) {
         System.out.println("Error deallocating stack for process " + id);
       }
+
+      InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H, getStats(index), currentProcess.getProcessId()));
+
       runningProcesses[index] = null;
       resetRegister(index);
     } else {

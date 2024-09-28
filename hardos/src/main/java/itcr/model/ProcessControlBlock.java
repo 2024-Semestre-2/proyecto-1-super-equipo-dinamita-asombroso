@@ -50,6 +50,7 @@ public class ProcessControlBlock {
     this.waitingTime = 0;
     this.turnaroundTime = 0;
     this.lastStateChangeTime = Instant.now();
+    this.updateCpuTimeUsed();
   }
 
   private static final Gson gson = new GsonBuilder()
@@ -58,6 +59,16 @@ public class ProcessControlBlock {
 
   public String toJsonString() {
     return gson.toJson(this);
+  }
+
+  public void setlastStateChangeTime() {
+    this.lastStateChangeTime = Instant.now();
+    this.updateCpuTimeUsed();
+  }
+
+  public void updateCpuTimeUsed() {
+    this.cpuTimeUsed = this.lastStateChangeTime.toEpochMilli() - this.startTime.toEpochMilli();
+    this.cpuTimeUsed /= 1000;
   }
 
   public static ProcessControlBlock fromJsonString(String jsonString) {
@@ -71,6 +82,7 @@ public class ProcessControlBlock {
     }
     this.state = newState;
     this.lastStateChangeTime = now;
+    this.updateCpuTimeUsed();
   }
 
   public void incrementProgramCounter() {

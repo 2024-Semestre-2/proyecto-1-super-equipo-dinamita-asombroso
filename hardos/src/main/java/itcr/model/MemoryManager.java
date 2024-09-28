@@ -202,7 +202,15 @@ public class MemoryManager {
     return -1; // No hay espacio suficiente
   }
 
-  public boolean deallocateMemory(String processName) {
+  public int getFirstProcessInstructionAddress(String processName) {
+    List<InstructionIndex> indices = processInstructionIndices.get(processName);
+    if (indices != null && !indices.isEmpty()) {
+      return indices.get(0).startIndex;
+    }
+    return -1;
+  }
+  
+  public synchronized boolean deallocateMemory(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName);
     if (allocation != null) {
       Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
@@ -214,7 +222,7 @@ public class MemoryManager {
     return false;
   }
 
-  private void addFreeSpace(MemoryAllocation newFreeSpace) {
+  private synchronized void addFreeSpace(MemoryAllocation newFreeSpace) {
     freeSpaces.add(newFreeSpace);
     freeSpaces.sort(Comparator.comparingInt(a -> a.startIndex));
   }

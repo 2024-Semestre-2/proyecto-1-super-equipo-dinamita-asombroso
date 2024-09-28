@@ -25,12 +25,24 @@ public class DesktopScreenController {
   }
 
   public void loadInitialFilesInMemory() {
-    String[] fileNames = { "createfile.asm" };
-    String[] fileContent = { "MOV AX, 0\nINT _08H\nMOV CX, BX\nINT _08H\nINT _21H\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nINT _20H" };
-
+    
+    String[] fileNames = { "createfile.asm", "createfile1.asm", "createfile2.asm", "createfile3.asm", "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm" };
+    String[] fileContent = { "INT _09H\nINT _10H" , 
+                             "MOV AX, 1\nINT _08H\nINT _21H",
+                             "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPOP BX\nPUSH AX" ,
+                             "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nMOV DX, BX",
+                             "MOV AX, 1\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX" , 
+                             "MOV AX, 2\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nMOV CX, 100",
+                             "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX" ,
+                             "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX"  
+                            };
+    
     boolean allFilesStored = false;
 
+
+
     for (int i = 0; i < fileNames.length; i++) {
+      
       allFilesStored = memoryManager.storeFile(fileNames[i], fileContent[i]);
     }
 
@@ -80,6 +92,8 @@ public class DesktopScreenController {
 
     return null;
   }
+
+  
 
   public int getKernelSize() {
     return memoryManager.getKernelSize();

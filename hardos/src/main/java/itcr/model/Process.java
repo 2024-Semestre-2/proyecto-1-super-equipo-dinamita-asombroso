@@ -19,6 +19,7 @@ public class Process {
     this.qtyInstructions = qtyInstructions;
   }
 
+
   public Process(ProcessControlBlock pcb) {
     this.pcb = pcb;
     this.currentInstructionIndex = 0;

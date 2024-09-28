@@ -23,6 +23,23 @@ public class Scheduler {
     return cpu.getRegisters(coreId);
   }
 
+  public String getRegisters(int index, int coreId) {
+    itcr.model.Process process = cpu.getRunningProcess(coreId);
+    if(process== null) {return "";}
+    if(process.getPCB() == null) {return "";}
+    
+    int address = process.getPCB().getStackPointer();
+
+    int PC =  process.getProgramCounter() + memoryManager.getFirstProcessInstructionAddress("P" + process.getProcessId()) ;
+
+    String res = "PC: " + PC + "\nStackPointer:";
+    res += address + "\n";
+    res += "IR: " + (PC - 1);
+    
+    return res;
+
+  }
+
   public void addProcess(Process process) {
     int processId = process.getPCB().getProcessId();
     readyQueue.offer(processId);
@@ -49,6 +66,10 @@ public class Scheduler {
 
   public void executeNextInstruction() throws Exception {
     cpu.executeInstruction(0);
+  }
+
+  public String getCoreStatus(int id) {
+    return cpu.getCoreStatus(id);
   }
 
   public void handleProcessCompletion(Process process) {
@@ -97,6 +118,7 @@ public class Scheduler {
           if (process != null) {
             String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
             ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+            if(pcb != null) { 
             if (pcb.getState() == ProcessState.RUNNING) {
               cpu.executeInstruction(coreId);
               if (pcb.getState() != ProcessState.WAITING) {
@@ -104,6 +126,7 @@ public class Scheduler {
                 //memoryManager.storeBCP("P" + process.getPCB().getProcessId(), pcb.toJsonString()); 6
               }
             }
+          }
           }
         } catch (Exception e) {
           e.printStackTrace();

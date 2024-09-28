@@ -88,6 +88,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     // Right Panel (Memory Map)
     memoryMapTree = new JTree();
     memoryMapTree.setRootVisible(false);
+    expandAllNodes(memoryMapTree, 0, -1);
     JScrollPane memoryMapScrollPane = new JScrollPane(memoryMapTree);
     memoryMapScrollPane.setBorder(BorderFactory.createTitledBorder("Memory Map"));
 
@@ -131,8 +132,6 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     return mainPanel;
   }
 
-
-
   private void updateMemoryMap(ActionEvent e) {
     MemoryMap memoryMap = controller.getMemoryManager().getMainMemoryMap();
     DefaultMutableTreeNode root = new DefaultMutableTreeNode("Memory");
@@ -166,6 +165,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     root.add(stringsNode);
 
     memoryMapTree.setModel(new DefaultTreeModel(root));
+    expandAllNodes(memoryMapTree, 0, -1);
   }
 
   private void addMemorySection(DefaultMutableTreeNode parent, MemoryMap.MemorySection section) {
@@ -266,6 +266,8 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
           UserInputHandler.provideInput(message.getProcessId(), input);
           updateRegistersDisplay();
           break;
+        default:
+          break;
       }
     });
   }
@@ -292,7 +294,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
         updateRegistersDisplay();
         updateMemoryMap(e);
         updateCoreLabels();
-      } else {
+      } else { // review
         consoleArea.append("No more instructions to execute\n");
       }
     } catch (Exception ex) {
@@ -317,6 +319,16 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     }
   }
 
+  private void expandAllNodes(JTree tree, int startingIndex, int rowCount) {
+    for (int i = startingIndex; i < rowCount; ++i) {
+      tree.expandRow(i);
+    }
+
+    if (tree.getRowCount() != rowCount) {
+      expandAllNodes(tree, rowCount, tree.getRowCount());
+    }
+  }
+
   public void printToConsole(String message) {
     consoleArea.append(message + "\n");
   }
@@ -328,6 +340,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   @Override
   public void dispose() {
     interruptExecutor.shutdownNow();
+    controller.reset();
     super.dispose();
   }
 }

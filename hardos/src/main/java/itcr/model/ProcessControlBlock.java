@@ -12,7 +12,9 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
+import com.google.gson.stream.JsonReader;
 
+import java.io.StringReader;
 import java.lang.reflect.Type;
 import java.time.Instant;
 
@@ -55,6 +57,7 @@ public class ProcessControlBlock {
 
   private static final Gson gson = new GsonBuilder()
       .registerTypeAdapter(Instant.class, new InstantAdapter())
+      .setLenient()
       .create();
 
   public String toJsonString() {
@@ -72,7 +75,9 @@ public class ProcessControlBlock {
   }
 
   public static ProcessControlBlock fromJsonString(String jsonString) {
-    return gson.fromJson(jsonString, ProcessControlBlock.class);
+    JsonReader reader = new JsonReader(new StringReader(jsonString));
+    reader.setLenient(true);
+    return gson.fromJson(reader, ProcessControlBlock.class);
   }
 
   public void updateState(ProcessState newState) {
@@ -229,13 +234,11 @@ public class ProcessControlBlock {
     @Override
     public Instant deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
         throws JsonParseException {
-      // TODO Auto-generated method stub
       return Instant.ofEpochMilli(json.getAsJsonPrimitive().getAsLong());
     }
 
     @Override
     public JsonElement serialize(Instant src, Type typeOfSrc, JsonSerializationContext context) {
-      // TODO Auto-generated method stub
       return new JsonPrimitive(src.toEpochMilli());
     }
   }

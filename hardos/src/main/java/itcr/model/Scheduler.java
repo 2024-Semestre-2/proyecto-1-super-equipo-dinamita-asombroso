@@ -5,6 +5,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
+import javax.swing.JOptionPane;
+
 public class Scheduler {
   private Queue<Integer> readyQueue;
   private Queue<Integer> waitingQueue;
@@ -25,17 +27,22 @@ public class Scheduler {
 
   public String getRegisters(int index, int coreId) {
     itcr.model.Process process = cpu.getRunningProcess(coreId);
-    if(process== null) {return "";}
-    if(process.getPCB() == null) {return "";}
-    
+    if (process == null) {
+      return "";
+    }
+    if (process.getPCB() == null) {
+      return "";
+    }
+
     int address = process.getPCB().getStackPointer();
 
-    int PC =  process.getProgramCounter() + memoryManager.getFirstProcessInstructionAddress("P" + process.getProcessId()) ;
+    int PC = process.getProgramCounter()
+        + memoryManager.getFirstProcessInstructionAddress("P" + process.getProcessId());
 
     String res = "PC: " + PC + "\nStackPointer:";
     res += address + "\n";
     res += "IR: " + (PC - 1);
-    
+
     return res;
 
   }
@@ -45,7 +52,7 @@ public class Scheduler {
     readyQueue.offer(processId);
     ProcessControlBlock pcb = process.getPCB();
     pcb.setState(ProcessState.READY);
-    //memoryManager.storeBCP("P" + processId, pcb.toJsonString()); // 0
+    // memoryManager.storeBCP("P" + processId, pcb.toJsonString()); // 0
   }
 
   public void scheduleNextProcess() {
@@ -55,7 +62,7 @@ public class Scheduler {
         String bcpJson = memoryManager.getBCP("P" + nextProcessId);
         ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
         pcb.setState(ProcessState.RUNNING);
-        memoryManager.storeBCP("P" + nextProcessId, pcb.toJsonString()); // 1
+        memoryManager.updateBCP("P" + nextProcessId, pcb.toJsonString()); // 1
 
         Process nextProcess = new itcr.model.Process(pcb);
         nextProcess.setQtyInstructions(memoryManager.getQtyInstructions("P" + nextProcessId));
@@ -99,7 +106,7 @@ public class Scheduler {
         String bcpJson = memoryManager.getBCP("P" + processId);
         ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
         pcb.setState(ProcessState.READY);
-        //memoryManager.storeBCP("P" + processId, pcb.toJsonString());// 5
+        // memoryManager.storeBCP("P" + processId, pcb.toJsonString());// 5
       } else {
         tempQueue.offer(processId);
       }
@@ -113,23 +120,35 @@ public class Scheduler {
     for (int i = 0; i < cpu.getNumCores(); i++) {
       final int coreId = i;
       threads[i] = new Thread(() -> {
+        String lastBcpJson = "";
+        boolean bcpsPrinted = false;
         try {
           Process process = cpu.getRunningProcess(coreId);
           if (process != null) {
             String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
+
+            //System.out.println("BCP: " + bcpJson);
+            if (!bcpsPrinted) {
+              memoryManager.printAllBCPs();
+              bcpsPrinted = true;
+            }
+            lastBcpJson = bcpJson;
+
             ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
-            if(pcb != null) { 
-            if (pcb.getState() == ProcessState.RUNNING) {
-              cpu.executeInstruction(coreId);
-              if (pcb.getState() != ProcessState.WAITING) {
-                pcb.incrementProgramCounter();
-                //memoryManager.storeBCP("P" + process.getPCB().getProcessId(), pcb.toJsonString()); 6
+            if (pcb != null) {
+              if (pcb.getState() == ProcessState.RUNNING) {
+                cpu.executeInstruction(coreId);
+                if (pcb.getState() != ProcessState.WAITING) {
+                  pcb.incrementProgramCounter();
+                  // memoryManager.storeBCP("P" + process.getPCB().getProcessId(),
+                  // pcb.toJsonString()); 6
+                }
               }
             }
           }
-          }
         } catch (Exception e) {
           e.printStackTrace();
+          System.out.println("Last BCP: " + lastBcpJson);
         }
       });
       threads[i].start();
@@ -171,5 +190,26 @@ public class Scheduler {
 
   public MemoryManager getMemoryManager() {
     return memoryManager;
+  }
+
+  // reset function
+  public void reset() {
+    readyQueue.clear();
+    waitingQueue.clear();
+    cpu.fullReset();
+
+    // print all files
+    System.out.println("Files in memory:");
+    for (String filename : memoryManager.getFiles()) {
+      System.out.println("File: " + filename);
+      String fileContent = memoryManager.getFile(filename);
+      if (cpu.memory.storeFile(filename, fileContent)) {
+        System.out.println("File re-stored successfully");
+      } else {
+        System.out.println("Error storing file");
+      }
+    }
+
+    this.memoryManager = cpu.memory;
   }
 }

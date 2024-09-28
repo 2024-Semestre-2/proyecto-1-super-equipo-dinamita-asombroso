@@ -511,7 +511,7 @@ public class MemoryManager {
   }
 
   // ---- BCP ----
-  public boolean storeBCP(String processName, String bcpString) {
+  public synchronized boolean storeBCP(String processName, String bcpString) {
     byte[] bcpBytes = bcpString.getBytes();
     MemoryAllocation allocation = allocateOSSpace(bcpBytes.length);
     if (allocation != null) {
@@ -522,7 +522,7 @@ public class MemoryManager {
     return false;
   }
 
-  public String getBCP(String processName) {
+  public synchronized String getBCP(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.get(processName + "_bcp");
     if (allocation != null) {
       byte[] bcpBytes = new byte[allocation.size];
@@ -532,7 +532,7 @@ public class MemoryManager {
     return null;
   }
 
-  public boolean freeBCP(String processName) {
+  public synchronized boolean freeBCP(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName + "_bcp");
     if (allocation != null) {
       Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
@@ -542,11 +542,43 @@ public class MemoryManager {
   }
 
   // delete BCP from main memory (os space) and free the space (suffix _bcp) using deallocateOSSpace
-  public boolean deleteBCP(String processName) {
+  public synchronized boolean deleteBCP(String processName) {
     MemoryAllocation allocation = mainMemoryIndex.remove(processName + "");
     if (allocation != null) {
       Arrays.fill(mainMemory, allocation.startIndex, allocation.startIndex + allocation.size, (byte) 0);
       return deallocateOSSpace(allocation.startIndex, allocation.size);
+    }
+    return false;
+  }
+
+  public synchronized void printAllBCPs() {
+    System.out.println("=== Stored BCPs ===");
+    if (mainMemoryIndex.isEmpty()) {
+      System.out.println("No BCPs stored in main memory.");
+    } else {
+      for (Map.Entry<String, MemoryAllocation> entry : mainMemoryIndex.entrySet()) {
+        String processName = entry.getKey();
+        MemoryAllocation allocation = entry.getValue();
+        String bcpContent = getBCP(processName);
+        System.out.printf("Process: %s, Size: %d bytes, Content: \"%s\"%n",
+            processName, allocation.size, bcpContent);
+      }
+    }
+    System.out.println("====================");
+  }
+
+  // updates and existing BCP in main memory (os space), checks if the new BCP fits in the same space or needs to be moved
+  public synchronized boolean updateBCP(String processName, String bcpString) {
+    MemoryAllocation allocation = mainMemoryIndex.get(processName + "_bcp");
+    if (allocation != null) {
+      byte[] bcpBytes = bcpString.getBytes();
+      if (bcpBytes.length <= allocation.size) {
+        System.arraycopy(bcpBytes, 0, mainMemory, allocation.startIndex, bcpBytes.length);
+        return true;
+      } else {
+        freeBCP(processName);
+        return storeBCP(processName, bcpString);
+      }
     }
     return false;
   }
@@ -572,6 +604,10 @@ public class MemoryManager {
       return new String(fileBytes);
     }
     return null;
+  }
+
+  public String[] getFiles() {
+    return secondaryStorageIndex.keySet().toArray(new String[0]);
   }
 
   public void freeFile(String fileName) {

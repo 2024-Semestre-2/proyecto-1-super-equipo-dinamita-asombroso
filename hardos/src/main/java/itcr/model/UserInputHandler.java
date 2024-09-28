@@ -18,4 +18,8 @@ public class UserInputHandler {
       future.complete(input);
     }
   }
+
+  public static void reset() {
+    inputFutures.clear();
+  }
 }

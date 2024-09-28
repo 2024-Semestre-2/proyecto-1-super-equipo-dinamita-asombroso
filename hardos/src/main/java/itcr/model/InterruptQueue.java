@@ -13,4 +13,8 @@ public class InterruptQueue {
   public static InterruptMessage takeMessage() throws InterruptedException {
     return queue.take();
   }
+
+  public static void clear() {
+    queue.clear();
+  }
 }

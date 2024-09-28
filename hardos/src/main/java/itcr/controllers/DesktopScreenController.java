@@ -40,7 +40,7 @@ public class DesktopScreenController {
       "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm"
     };
     String[] fileContent = {
-      "INT _09H\nINT _10H",
+      "MOV AX, 3\nINT _08H\nMOV CX, BX\nINT _08H\nINT _21H",
       "MOV AX, 1\nINT _08H\nINT _21H",
       "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPOP BX\nPUSH AX",
       "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nMOV DX, BX",

@@ -5,45 +5,57 @@ import itcr.graphics.MyPcConfig;
 import itcr.graphics.Hard8086;
 import itcr.model.*;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 
+/**
+ * The DesktopScreenController class manages the main desktop screen functionalities,
+ * including loading initial files into memory, opening various system components,
+ * and validating memory configurations.
+ */
 public class DesktopScreenController {
-  private JFrame parent;
-  private MemoryManager memoryManager;
-  private Scheduler scheduler;
+  private final JFrame parent;
+  private final MemoryManager memoryManager;
+  private final Scheduler scheduler;
 
+  /**
+   * Constructs a DesktopScreenController with the specified parent JFrame.
+   *
+   * @param parent the parent JFrame
+   */
   public DesktopScreenController(JFrame parent) {
     this.parent = parent;
     CPU cpu = new CPU();
     this.memoryManager = new MemoryManager();
     this.scheduler = new Scheduler(cpu, memoryManager);
-    this.loadInitialFilesInMemory();
+    loadInitialFilesInMemory();
   }
 
-  public void loadInitialFilesInMemory() {
-    
-    String[] fileNames = { "createfile.asm", "createfile1.asm", "createfile2.asm", "createfile3.asm", "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm" };
-    String[] fileContent = { "INT _09H\nINT _10H" , 
-                             "MOV AX, 1\nINT _08H\nINT _21H",
-                             "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPOP BX\nPUSH AX" ,
-                             "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nMOV DX, BX",
-                             "MOV AX, 1\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX" , 
-                             "MOV AX, 2\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nMOV CX, 100",
-                             "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX" ,
-                             "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX"  
-                            };
-    
-    boolean allFilesStored = false;
+  /**
+   * Loads initial files into memory. For now they are only "assembly" files.
+   */
+  private void loadInitialFilesInMemory() {
+    String[] fileNames = {
+      "createfile.asm", "createfile1.asm", "createfile2.asm", "createfile3.asm",
+      "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm"
+    };
+    String[] fileContent = {
+      "INT _09H\nINT _10H",
+      "MOV AX, 1\nINT _08H\nINT _21H",
+      "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPOP BX\nPUSH AX",
+      "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nMOV DX, BX",
+      "MOV AX, 1\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX",
+      "MOV AX, 2\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nMOV CX, 100",
+      "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX",
+      "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX"
+    };
 
-
+    boolean allFilesStored = true;
 
     for (int i = 0; i < fileNames.length; i++) {
-      
-      allFilesStored = memoryManager.storeFile(fileNames[i], fileContent[i]);
+      if (!memoryManager.storeFile(fileNames[i], fileContent[i])) {
+        allFilesStored = false;
+      }
     }
 
     if (!allFilesStored) {
@@ -51,27 +63,45 @@ public class DesktopScreenController {
     }
   }
 
+  /**
+   * Opens the "My Computer" configuration window.
+   */
   public void openMyComputer() {
-    MyPcConfigController myPcConfigController = new MyPcConfigController(this, memoryManager);
+    MyPcConfigController myPcConfigController = new MyPcConfigController(memoryManager);
     MyPcConfig myPcConfig = new MyPcConfig(parent, myPcConfigController);
     myPcConfig.setVisible(true);
   }
 
+  /**
+   * Opens the Recycle Bin.
+   */
   public void openRecycleBin() {
     JOptionPane.showMessageDialog(null, "Abriendo Papelera de Reciclaje");
   }
 
+  /**
+   * Opens the File Explorer.
+   */
   public void openFileExplorer() {
     FileExplorerController fileExplorerController = new FileExplorerController(memoryManager);
     FileExplorer fileExplorer = new FileExplorer(parent, fileExplorerController);
     fileExplorer.setVisible(true);
   }
 
+  /**
+   * Opens the Hard8086 emulator.
+   */
   public void openHard8086() {
     Hard8086 hard8086 = new Hard8086(parent, scheduler);
     hard8086.setVisible(true);
   }
 
+  /**
+   * Loads configuration from a file.
+   *
+   * @param configFilePath the path to the configuration file
+   * @param fileType the type of the configuration file
+   */
   public void loadConfigurationFromFile(String configFilePath, String fileType) {
     try {
       memoryManager.loadConfigurationFromFile(configFilePath, fileType);
@@ -80,8 +110,17 @@ public class DesktopScreenController {
     }
   }
 
-  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize,
-      int virtualMemorySize) {
+  /**
+   * Validates the memory configuration.
+   *
+   * @param kernelSize the size of the kernel
+   * @param osSize the size of the operating system
+   * @param mainMemorySize the size of the main memory
+   * @param secondaryMemorySize the size of the secondary memory
+   * @param virtualMemorySize the size of the virtual memory
+   * @return an error message if the configuration is invalid, otherwise null
+   */
+  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize) {
     if (kernelSize < 0 || osSize < 0 || mainMemorySize < 0 || secondaryMemorySize < 0 || virtualMemorySize < 0) {
       return "Los tamaños no pueden ser negativos";
     }
@@ -93,7 +132,7 @@ public class DesktopScreenController {
     return null;
   }
 
-  
+  // Getters and setters
 
   public int getKernelSize() {
     return memoryManager.getKernelSize();

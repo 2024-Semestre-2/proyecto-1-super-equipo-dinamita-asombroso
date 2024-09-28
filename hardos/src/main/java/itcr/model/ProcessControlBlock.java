@@ -37,7 +37,7 @@ public class ProcessControlBlock {
 
   public ProcessControlBlock(int processId, int baseAddress, int processSize, int priority) {
     this.processId = processId;
-    this.state = ProcessState.NEW;
+    this.state = ProcessState.READY;
     this.programCounter = 0;
     this.registers = new int[5]; // AC, AX, BX, CX, DX
     this.cpuTimeUsed = 0;

@@ -194,22 +194,19 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     if (!selectedFiles.isEmpty()) {
       StringBuilder sb = new StringBuilder("Selected files:\n");
       for (String fileName : selectedFiles) {
-        // TODO: assembler validation
-        String strInstructions = controller.getFileContent(fileName);
-        if (!Assembler.validateFormat(strInstructions)) {System.out.println("Error:___");continue;}
+          String strInstructions = controller.getFileContent(fileName);
+          String assemblerErrors = Assembler.validateFormat(strInstructions);
+          if (assemblerErrors != null) {
+            JOptionPane.showMessageDialog(this, assemblerErrors, "Error " + fileName, JOptionPane.ERROR_MESSAGE);
+            return;
+          }
 
-        // Separate instructions by line
         String[] instructions = strInstructions.split("\n");
-
-        // Creation of the process
         itcr.model.Process process = createProcess(instructions);
-
         for (String instruction : instructions) {
           controller.getMemoryManager().storeInstruction("P" + process.getProcessId(), instruction);
         }
-
         controller.addProcess(process);
-
         sb.append(fileName).append("\n");
       }
     }

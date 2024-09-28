@@ -282,20 +282,22 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   }
 
   private void executeAllInstructions(ActionEvent e) {
-
     try {
-      while (controller.hasMoreInstructions()) {
-        controller.executeInstruction();
+      int count = 10;
+      while (count != 0) {
+        System.out.println("sjjdsdsdnjshndbsndksndksnjkdnj=================================================snjkn");
+        executeNextInstruction(e);
+
         Thread.sleep(1000);
-        updateRegistersDisplay();
+        count--;
       }
-      consoleArea.append("All instructions executed\n");
+      consoleArea.append("All instructions executed==\n");
     } catch (Exception ex) {
       consoleArea.append("Error: " + ex.getMessage() + "\n");
     }
   }
 
-  private void executeNextInstruction(ActionEvent e) {
+  private synchronized void executeNextInstruction(ActionEvent e) {
     try {
       if (true) {
         if(firstStep) {this.firstStep = false; controller.executeInstruction();}

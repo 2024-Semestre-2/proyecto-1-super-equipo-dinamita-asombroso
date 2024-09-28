@@ -56,9 +56,7 @@ public class CPU {
     if (coreId >= 0 && coreId < NUM_CORES) {
       runningProcesses[coreId] = process;
       loadProcessContext(coreId);
-    } else {
-      throw new IllegalArgumentException("Invalid core ID");
-    }
+    } 
   }
 
   public void executeInstruction(int coreId) throws Exception {
@@ -70,6 +68,7 @@ public class CPU {
       dispatcher(coreId);
       return;
     }
+    System.out.println(instruction);
     String[] parts = instruction.split(" ");
     InstructionType type = InstructionType.valueOf(parts[0]);
     instructionHandlers.get(type).accept(coreId, parts);
@@ -124,29 +123,36 @@ public class CPU {
     if (memory.writeToStack(processId, currentSP + 1, value)) {
       pcb.setStackPointer(currentSP + 1);
     } else {
-      throw new IllegalArgumentException("Failed to push value to stack for process " + processId);
+      String message  = "Failed to push value to stack for process " + processId;
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
   }
 
   private void handlePop(int coreId, String[] parts) {
+    Process process = runningProcesses[coreId];
+
     if (parts.length != 2) {
-      throw new IllegalArgumentException("POP instruction requires a register argument.");
+      String message  = "POP instruction requires a register argument.";
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
 
     Register targetRegister;
     try {
       targetRegister = Register.valueOf(parts[1].toUpperCase());
     } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException("Invalid register: " + parts[1]);
-    }
+      System.out.println();
+      String message  = ("Invalid register: " + parts[1]);
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+    } finally {targetRegister = null;}
 
-    Process process = runningProcesses[coreId];
+    
     String processId = "P" + process.getProcessId();
     ProcessControlBlock pcb = process.getPCB();
     int currentSP = pcb.getStackPointer();
 
     if (currentSP < 0) {
-      throw new IllegalArgumentException("Stack underflow: stack is empty.");
+      String message  = ("Stack underflow: stack is empty.");
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
 
     int value = memory.popFromStack(processId, currentSP);
@@ -155,15 +161,16 @@ public class CPU {
   }
 
   private void handleParam(int coreId, String[] parts) {
+    Process process = runningProcesses[coreId];
     String[] cleanParts = Arrays.stream(parts)
         .map(part -> part.replace(",", "").trim())
         .toArray(String[]::new);
 
     if (cleanParts.length < 2 || cleanParts.length > 4) {
-      throw new IllegalArgumentException("PARAM instruction requires 1 to 3 parameters.");
+      String message  = ("PARAM instruction requires 1 to 3 parameters.");
+      InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
 
-    Process process = runningProcesses[coreId];
     String processId = "P" + process.getProcessId();
     ProcessControlBlock pcb = process.getPCB();
     int currentSP = pcb.getStackPointer();
@@ -172,16 +179,20 @@ public class CPU {
       try {
         int value = Integer.parseInt(cleanParts[i]);
         if (currentSP >= 4) {
-          throw new IllegalArgumentException("Stack overflow: maximum stack size is 5.");
+          String message  = ("Stack overflow: maximum stack size is 5.");
+          InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+          
         }
         if (memory.writeToStack(processId, currentSP + 1, value)) {
           currentSP++;
           pcb.setStackPointer(currentSP);
         } else {
-          throw new IllegalArgumentException("Failed to write parameter to stack for process " + processId);
+          String message  = ("Failed to write parameter to stack for process " + processId);
+          InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
         }
       } catch (NumberFormatException e) {
-        throw new IllegalArgumentException("Parameter must be a valid 32-bit integer", e);
+        String message  = ("Parameter must be a valid 32-bit integer");
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
       }
     }
   }
@@ -220,11 +231,13 @@ public class CPU {
 
     if (val > 0) {
       if (val + currentIndex >= topIndex) {
-        throw new Error("Desplazamiento invalido.");
+        String message = ("Desplazamiento invalido.");
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, currentP.getProcessId()));
       }
     } else {
       if (currentIndex + val < 0) {
-        throw new Error("Desplazamiento invalido.");
+        String message = ("Desplazamiento invalido.");
+        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, currentP.getProcessId()));
       }
     }
     runningProcesses[coreId].setCurrentInstructionIndex(currentIndex + val);
@@ -300,6 +313,7 @@ public class CPU {
 
   private void handleInterrupt(int coreId, String[] parts) {
     InterruptCode code = InterruptCode.valueOf(parts[1]);
+    System.out.println("EHREEEEEEEEEEEEEEEEEEEEEEE"  + code);
     Process process = runningProcesses[coreId];
     String prefixMsg = "[ Core " + coreId + " ] >> ";
     String message = "";
@@ -430,7 +444,7 @@ public class CPU {
             String msg = prefixMsg + "Invalid input";
             InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
           }
-          process.updateState(ProcessState.READY);
+          process.updateState(ProcessState.RUNNING);
           memory.updateBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
         });
         break;
@@ -563,7 +577,8 @@ public class CPU {
       runningProcesses[index] = null;
       resetRegister(index);
     } else {
-      throw new IndexOutOfBoundsException("Index out of bounds: " + index);
+      String message  = ("Index out of bounds: " + index);
+      InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H, message, runningProcesses[0].getProcessId()));
     }
   }
 

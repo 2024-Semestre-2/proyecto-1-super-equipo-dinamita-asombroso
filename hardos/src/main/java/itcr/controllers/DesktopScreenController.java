@@ -34,7 +34,7 @@ public class DesktopScreenController {
   /**
    * Loads initial files into memory. For now they are only "assembly" files.
    */
-  private void loadInitialFilesInMemory() {
+  public void loadInitialFilesInMemory() {
     String[] fileNames = {
       "createfile.asm", "createfile1.asm", "createfile2.asm", "createfile3.asm",
       "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm"
@@ -68,6 +68,7 @@ public class DesktopScreenController {
    */
   public void openMyComputer() {
     MyPcConfigController myPcConfigController = new MyPcConfigController(memoryManager);
+    myPcConfigController.desktopScreenControllerRef = this;
     MyPcConfig myPcConfig = new MyPcConfig(parent, myPcConfigController);
     myPcConfig.setVisible(true);
   }
@@ -178,5 +179,13 @@ public class DesktopScreenController {
   public void changeScheduler (Scheduler scheduler) {
     this.scheduler = scheduler;
     this.memoryManager = scheduler.cpu.memory;
+  }
+
+  public void updateMemorySize(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize) {
+    memoryManager.setKernelSize(kernelSize);
+    memoryManager.setOsSize(osSize);
+    memoryManager.setMainMemorySize(mainMemorySize);
+    memoryManager.setSecondaryMemorySize(secondaryMemorySize);
+    memoryManager.setVirtualMemorySize(virtualMemorySize);
   }
 }

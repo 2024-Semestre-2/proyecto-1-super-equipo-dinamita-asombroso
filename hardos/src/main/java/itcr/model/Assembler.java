@@ -3,6 +3,9 @@ package itcr.model;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Assembler class provides methods to validate assembly code instructions.
+ */
 public class Assembler {
 
   private static final String MOV_REGEX = "^MOV\\s+([A-D]X)\\s*,\\s*(([A-D]X)|\\d+)(\\s*//.*)?$";
@@ -23,8 +26,13 @@ public class Assembler {
   private static final String POP_REGEX = "^POP\\s+([A-D]X)(\\s*//.*)?$";
   private static final String COMMENT_REGEX = "^(//.*)$";
 
-  
-
+  /**
+   * Validates a single instruction against known patterns.
+   *
+   * @param instruction the instruction to validate
+   * @param lineNumber the line number of the instruction
+   * @return null if the instruction is valid, otherwise an error message
+   */
   private static String validateInstruction(String instruction, int lineNumber) {
     if (instruction.matches(MOV_REGEX)) return null;
     if (instruction.matches(LOAD_REGEX)) return null;
@@ -48,6 +56,12 @@ public class Assembler {
     return String.format("Error en línea %d: Instrucción no reconocida '%s'", lineNumber, instruction);
   }
 
+  /**
+   * Validates the format of the given assembly code.
+   *
+   * @param code the assembly code to validate
+   * @return null if the code is valid, otherwise an error message
+   */
   public static String validateFormat(String code) {
     if (code == null || code.isEmpty()) {
       return "Error: El código está vacío o es nulo";
@@ -61,7 +75,7 @@ public class Assembler {
       if (!line.isEmpty()) {
         String error = validateInstruction(line, i + 1);
         if (error != null) {
-            errors.add(error);
+          errors.add(error);
         }
       }
     }

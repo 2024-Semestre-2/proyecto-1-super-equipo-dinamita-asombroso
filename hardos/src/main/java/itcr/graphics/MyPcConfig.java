@@ -6,6 +6,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 
+/**
+ * MyPcConfig class represents a custom floating window for configuring PC
+ * settings.
+ * It allows users to set various memory sizes and load configurations from a
+ * file.
+ */
 public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
   private JTextField kernelSizeField;
   private JTextField osSizeField;
@@ -14,10 +20,21 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
   private JTextField virtualMemorySizeField;
   private JButton loadConfigButton;
 
+  /**
+   * Constructor for MyPcConfig.
+   * Initializes the configuration window with the given parent frame and
+   * controller.
+   *
+   * @param parent     the parent frame
+   * @param controller the controller to manage the configuration
+   */
   public MyPcConfig(JFrame parent, MyPcConfigController controller) {
     super(parent, "Configuración de Mi PC", controller);
   }
 
+  /**
+   * Initializes the components of the configuration window.
+   */
   @Override
   protected void initComponents() {
     JPanel mainPanel = new JPanel(new GridLayout(7, 2));
@@ -53,6 +70,9 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     add(mainPanel, BorderLayout.CENTER);
   }
 
+  /**
+   * Saves the changes made in the configuration window.
+   */
   private void saveChanges() {
     int kernelSize = Integer.parseInt(kernelSizeField.getText());
     int osSize = Integer.parseInt(osSizeField.getText());
@@ -77,6 +97,9 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     dispose();
   }
 
+  /**
+   * Loads the configuration from a file.
+   */
   private void loadConfigurationFromFile() {
     JFileChooser fileChooser = new JFileChooser();
     int result = fileChooser.showOpenDialog(this);
@@ -95,6 +118,12 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     }
   }
 
+  /**
+   * Gets the file type from the file name.
+   *
+   * @param file the file
+   * @return the file type
+   */
   private String getFileType(File file) {
     String fileName = file.getName();
     int dotIndex = fileName.lastIndexOf('.');
@@ -104,6 +133,10 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     return "";
   }
 
+  /**
+   * Updates the fields in the configuration window with the current values from
+   * the controller.
+   */
   private void updateFields() {
     kernelSizeField.setText(String.valueOf(controller.getKernelSize()));
     osSizeField.setText(String.valueOf(controller.getOsSize()));

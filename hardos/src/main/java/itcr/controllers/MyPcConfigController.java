@@ -8,6 +8,7 @@ import itcr.model.MemoryManager;
  */
 public class MyPcConfigController {
   private final MemoryManager memoryManager;
+  public DesktopScreenController desktopScreenControllerRef = null;
 
   /**
    * Constructs a MyPcConfigController with the specified MemoryManager.
@@ -139,6 +140,7 @@ public class MyPcConfigController {
   public void loadConfigurationFromFile(String configFilePath, String fileType) {
     try {
       memoryManager.loadConfigurationFromFile(configFilePath, fileType);
+      desktopScreenControllerRef.loadInitialFilesInMemory();
     } catch (Exception e) {
       throw new RuntimeException("Error loading configuration: " + e.getMessage(), e);
     }

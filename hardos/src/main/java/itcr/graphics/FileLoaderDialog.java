@@ -8,12 +8,23 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * FileLoaderDialog class represents a dialog for loading files.
+ * It allows users to select files and preview their content.
+ */
 public class FileLoaderDialog extends JDialog {
   private final Scheduler scheduler;
   private final List<JCheckBox> fileCheckboxes;
   private JTextArea previewArea;
   private List<String> selectedFiles;
 
+  /**
+   * Constructor for FileLoaderDialog.
+   * Initializes the dialog with the given parent frame and scheduler.
+   *
+   * @param parent    the parent frame
+   * @param scheduler the scheduler to manage file operations
+   */
   public FileLoaderDialog(JFrame parent, Scheduler scheduler) {
     super(parent, "Load Files", true);
     this.scheduler = scheduler;
@@ -25,6 +36,9 @@ public class FileLoaderDialog extends JDialog {
     initComponents();
   }
 
+  /**
+   * Initializes the components of the dialog.
+   */
   private void initComponents() {
     setLayout(new BorderLayout());
 
@@ -42,6 +56,7 @@ public class FileLoaderDialog extends JDialog {
       JPanel filePanel = new JPanel(new BorderLayout());
       filePanel.add(checkBox, BorderLayout.WEST);
       filePanel.addMouseListener(new java.awt.event.MouseAdapter() {
+        @Override
         public void mouseClicked(java.awt.event.MouseEvent evt) {
           showFilePreview(file.getFileName());
         }
@@ -81,11 +96,19 @@ public class FileLoaderDialog extends JDialog {
     add(buttonsPanel, BorderLayout.SOUTH);
   }
 
+  /**
+   * Displays the preview of the selected file.
+   *
+   * @param fileName the name of the file to preview
+   */
   private void showFilePreview(String fileName) {
     String content = scheduler.getFileContent(fileName);
     previewArea.setText(content);
   }
 
+  /**
+   * Updates the list of selected files based on the checkboxes.
+   */
   private void updateSelectedFiles() {
     selectedFiles.clear();
     for (JCheckBox checkBox : fileCheckboxes) {
@@ -95,6 +118,9 @@ public class FileLoaderDialog extends JDialog {
     }
   }
 
+  /**
+   * Toggles the selection of all files.
+   */
   private void toggleSelectAllFiles() {
     boolean selectAll = fileCheckboxes.stream().anyMatch(cb -> !cb.isSelected());
     for (JCheckBox checkBox : fileCheckboxes) {
@@ -103,6 +129,11 @@ public class FileLoaderDialog extends JDialog {
     updateSelectedFiles();
   }
 
+  /**
+   * Returns the list of selected files.
+   *
+   * @return the list of selected files
+   */
   public List<String> getSelectedFiles() {
     return selectedFiles;
   }

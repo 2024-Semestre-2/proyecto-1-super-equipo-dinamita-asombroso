@@ -4,8 +4,6 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-import javax.swing.JOptionPane;
-
 import java.util.HashMap;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -13,8 +11,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
-import itcr.model.ProcessState;
 
+/**
+ * CPU class represents the central processing unit with multiple cores.
+ * It manages the execution of processes and handles various instructions.
+ */
 public class CPU {
   private static final int NUM_CORES = 5;
   public Process[] runningProcesses;
@@ -28,14 +29,20 @@ public class CPU {
   // private boolean carryFlag = false;
   // private boolean overflowFlag = false;
 
+  /**
+   * Constructor for CPU.
+   * Initializes the CPU with the specified number of cores and sets up registers.
+   */
   public CPU() {
-    // this.memory = memory;
     runningProcesses = new Process[NUM_CORES];
     instructionRegisters = new String[NUM_CORES];
     registers = new EnumMap[NUM_CORES];
     initializeRegisters();
   }
 
+  /**
+   * Initializes the registers for each core.
+   */
   private void initializeRegisters() {
     for (int i = 0; i < NUM_CORES; i++) {
       registers[i] = new EnumMap<>(Register.class);
@@ -45,6 +52,11 @@ public class CPU {
     }
   }
 
+  /**
+   * Resets the registers for a specific core.
+   *
+   * @param index the index of the core
+   */
   private void resetRegister(int index) {
     registers[index] = new EnumMap<>(Register.class);
     for (Register reg : Register.values()) {
@@ -52,13 +64,25 @@ public class CPU {
     }
   }
 
+  /**
+   * Assigns a process to a specific core.
+   *
+   * @param process the process to assign
+   * @param coreId  the ID of the core
+   */
   public void assignProcessToCore(Process process, int coreId) {
     if (coreId >= 0 && coreId < NUM_CORES) {
       runningProcesses[coreId] = process;
       loadProcessContext(coreId);
-    } 
+    }
   }
 
+  /**
+   * Executes the next instruction for a specific core.
+   *
+   * @param coreId the ID of the core
+   * @throws Exception if an error occurs during execution
+   */
   public void executeInstruction(int coreId) throws Exception {
     Process process = runningProcesses[coreId];
     String instruction = getNextInstruction(coreId);
@@ -68,18 +92,16 @@ public class CPU {
       dispatcher(coreId);
       return;
     }
-    System.out.println(instruction);
+
     String[] parts = instruction.split(" ");
     InstructionType type = InstructionType.valueOf(parts[0]);
     instructionHandlers.get(type).accept(coreId, parts);
     process.getPCB().incrementProgramCounter();
     process.getPCB().getStartTime();
-    
-
     process.getPCB().setlastStateChangeTime();
     process.getPCB().updateCpuTimeUsed();
 
-    memory.updateBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
+    memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
     saveProcessContext(coreId);
   }
 
@@ -106,6 +128,10 @@ public class CPU {
 
   // Instruction handlers (push, pop, mov, etc.)
 
+  /**
+   * Handles the PUSH instruction.
+   * Pushes the value in the AX register onto the stack.
+   */
   private void handlePush(int coreId, String[] parts) {
     Process process = runningProcesses[coreId];
     String processId = "P" + process.getProcessId();
@@ -113,7 +139,7 @@ public class CPU {
     int currentSP = pcb.getStackPointer();
 
     if (currentSP >= 4) {
-      String message  = "Stack overflow: maximum stack size is 5.";
+      String message = "Stack overflow: maximum stack size is 5.";
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
       return;
     }
@@ -123,36 +149,40 @@ public class CPU {
     if (memory.writeToStack(processId, currentSP + 1, value)) {
       pcb.setStackPointer(currentSP + 1);
     } else {
-      String message  = "Failed to push value to stack for process " + processId;
+      String message = "Failed to push value to stack for process " + processId;
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
   }
 
+  /**
+   * Handles the POP instruction.
+   * Pops the top value from the stack into the specified register.
+   */
   private void handlePop(int coreId, String[] parts) {
     Process process = runningProcesses[coreId];
 
     if (parts.length != 2) {
-      String message  = "POP instruction requires a register argument.";
+      String message = "POP instruction requires a register argument.";
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
 
-    Register targetRegister;
+    Register targetRegister = null;
     try {
       targetRegister = Register.valueOf(parts[1].toUpperCase());
     } catch (IllegalArgumentException e) {
-      System.out.println();
-      String message  = ("Invalid register: " + parts[1]);
+      String message = ("Invalid register: " + parts[1]);
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-    } finally {targetRegister = null;}
+      return; // Exit the method if the register is invalid
+    }
 
-    
     String processId = "P" + process.getProcessId();
     ProcessControlBlock pcb = process.getPCB();
     int currentSP = pcb.getStackPointer();
 
     if (currentSP < 0) {
-      String message  = ("Stack underflow: stack is empty.");
+      String message = ("Stack underflow: stack is empty.");
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
+      return; // Exit the method if the stack is empty
     }
 
     int value = memory.popFromStack(processId, currentSP);
@@ -160,6 +190,10 @@ public class CPU {
     pcb.setStackPointer(currentSP - 1);
   }
 
+  /**
+   * Handles the PARAM instruction.
+   * Pushes one to three parameters onto the stack.
+   */
   private void handleParam(int coreId, String[] parts) {
     Process process = runningProcesses[coreId];
     String[] cleanParts = Arrays.stream(parts)
@@ -167,7 +201,7 @@ public class CPU {
         .toArray(String[]::new);
 
     if (cleanParts.length < 2 || cleanParts.length > 4) {
-      String message  = ("PARAM instruction requires 1 to 3 parameters.");
+      String message = ("PARAM instruction requires 1 to 3 parameters.");
       InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
     }
 
@@ -179,36 +213,47 @@ public class CPU {
       try {
         int value = Integer.parseInt(cleanParts[i]);
         if (currentSP >= 4) {
-          String message  = ("Stack overflow: maximum stack size is 5.");
+          String message = ("Stack overflow: maximum stack size is 5.");
           InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-          
         }
         if (memory.writeToStack(processId, currentSP + 1, value)) {
           currentSP++;
           pcb.setStackPointer(currentSP);
         } else {
-          String message  = ("Failed to write parameter to stack for process " + processId);
+          String message = ("Failed to write parameter to stack for process " + processId);
           InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
         }
       } catch (NumberFormatException e) {
-        String message  = ("Parameter must be a valid 32-bit integer");
+        String message = ("Parameter must be a valid 32-bit integer");
         InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
       }
     }
   }
 
+  /**
+   * Handles the JE (Jump if Equal) instruction.
+   * Jumps to the specified instruction if the zero flag is set.
+   */
   private void handleJe(int coreId, String[] parts) {
     if (zeroFlag) {
       handleJmp(coreId, parts);
     }
   }
 
+  /**
+   * Handles the JNE (Jump if Not Equal) instruction.
+   * Jumps to the specified instruction if the zero flag is not set.
+   */
   private void handleJne(int coreId, String[] parts) {
     if (!zeroFlag) {
       handleJmp(coreId, parts);
     }
   }
 
+  /**
+   * Handles the CMP (Compare) instruction.
+   * Compares the values of two registers and sets the zero flag accordingly.
+   */
   private void handleCmp(int coreId, String[] parts) {
     Register reg1 = Register.valueOf(parts[1].replace(",", ""));
     Register reg2 = Register.valueOf(parts[2]);
@@ -222,6 +267,10 @@ public class CPU {
     }
   }
 
+  /**
+   * Handles the JMP (Jump) instruction.
+   * Jumps to the specified instruction index.
+   */
   private void handleJmp(int coreId, String[] parts) {
     Process currentP = runningProcesses[coreId];
 
@@ -243,6 +292,10 @@ public class CPU {
     runningProcesses[coreId].setCurrentInstructionIndex(currentIndex + val);
   }
 
+  /**
+   * Handles the SWAP instruction.
+   * Swaps the values of two registers.
+   */
   private void handleSwap(int coreId, String[] parts) {
     Register reg1 = Register.valueOf(parts[1].replace(",", ""));
     Register reg2 = Register.valueOf(parts[2]);
@@ -251,6 +304,11 @@ public class CPU {
     registers[coreId].put(reg2, temp);
   }
 
+  /**
+   * Handles the DEC (Decrement) instruction.
+   * Decrements the value of the specified register or the AC register if no
+   * register is specified.
+   */
   private void handleDec(int coreId, String[] parts) {
     if (parts.length == 1) {
       int result = registers[coreId].get(Register.AC) - 1;
@@ -264,6 +322,11 @@ public class CPU {
     }
   }
 
+  /**
+   * Handles the INC (Increment) instruction.
+   * Increments the value of the specified register or the AC register if no
+   * register is specified.
+   */
   private void handleInc(int coreId, String[] parts) {
     if (parts.length == 1) {
       int result = registers[coreId].get(Register.AC) + 1;
@@ -277,16 +340,29 @@ public class CPU {
     }
   }
 
+  /**
+   * Handles the LOAD instruction.
+   * Loads the value of the specified register into the AC register.
+   */
   private void handleLoad(int coreId, String[] parts) {
     Register reg = Register.valueOf(parts[1]);
     registers[coreId].put(Register.AC, registers[coreId].get(reg));
   }
 
+  /**
+   * Handles the STORE instruction.
+   * Stores the value of the AC register into the specified register.
+   */
   private void handleStore(int coreId, String[] parts) {
     Register reg = Register.valueOf(parts[1]);
     registers[coreId].put(reg, registers[coreId].get(Register.AC));
   }
 
+  /**
+   * Handles the MOV (Move) instruction.
+   * Moves the value from one register to another or sets a register to a
+   * specified value.
+   */
   private void handleMov(int coreId, String[] parts) {
     Register destReg = Register.valueOf(parts[1].replace(",", ""));
     if (parts.length == 3 && !isNumeric(parts[2])) {
@@ -297,6 +373,10 @@ public class CPU {
     }
   }
 
+  /**
+   * Handles the ADD instruction.
+   * Adds the value of the specified register to the AC register.
+   */
   private void handleAdd(int coreId, String[] parts) {
     Register reg = Register.valueOf(parts[1]);
     int result = registers[coreId].get(Register.AC) + registers[coreId].get(reg);
@@ -304,6 +384,10 @@ public class CPU {
     updateFlags(result);
   }
 
+  /**
+   * Handles the SUB (Subtract) instruction.
+   * Subtracts the value of the specified register from the AC register.
+   */
   private void handleSub(int coreId, String[] parts) {
     Register reg = Register.valueOf(parts[1]);
     int result = registers[coreId].get(Register.AC) - registers[coreId].get(reg);
@@ -311,173 +395,345 @@ public class CPU {
     updateFlags(result);
   }
 
-  private void handleInterrupt(int coreId, String[] parts) {
+  // ------------------------------
+  // Interrupt handling functions
+  // ------------------------------
+
+  /**
+   * Handles an interrupt for a specific core.
+   *
+   * @param coreId the ID of the core
+   * @param parts  the parts of the interrupt instruction
+   */
+  public void handleInterrupt(int coreId, String[] parts) {
     InterruptCode code = InterruptCode.valueOf(parts[1]);
-    System.out.println("EHREEEEEEEEEEEEEEEEEEEEEEE"  + code);
     Process process = runningProcesses[coreId];
     String prefixMsg = "[ Core " + coreId + " ] >> ";
-    String message = "";
+
     switch (code) {
-      case _21H: // file management
-        int ax_value = registers[coreId].get(Register.AX);
-        int bx_value = registers[coreId].get(Register.BX);
-        int cx_value = registers[coreId].get(Register.CX);
-
-        String fileName = memory.getString(bx_value);
-        String content = memory.getString(cx_value);
-
-        // depends on the value of ax the type of file management
-        // 0: create file, 1: open file, 2: read file, 3: write file, 4: close file
-
-        // on the value of bx, is the name of the file (used for all the operations)
-
-        // on the value of cx, is the content of the file (used for write file)
-
-        switch (ax_value) {
-          case 0:
-            // create file
-            message = prefixMsg + "File " + fileName + " created";
-
-            memory.createFile(fileName);
-            break;
-
-          case 1:
-
-            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
-              message = prefixMsg + "File " + fileName + " is already opened by another process";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-              break;
-            }
-
-            // open file
-            message = prefixMsg + "File " + fileName + " opened";
-            String existingFile = memory.getFile(fileName);
-            if (existingFile == null) {
-              message = prefixMsg + "File " + fileName + " does not exist";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-              break;
-            }
-            process.getPCB().getOpenFiles().add(fileName);
-            memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-            break;
-          case 2:
-
-            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
-              message = prefixMsg + "File " + fileName + " is already opened by another process";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-              break;
-            }
-
-            // read file
-            message = prefixMsg + "File " + fileName + " read";
-            // just print the content of the file
-            String fileContent = memory.getFile(fileName);
-            if (fileContent == null) {
-              message = prefixMsg + "File " + fileName + " does not exist";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-              break;
-            }
-            message = prefixMsg + "File " + fileName + " content: " + fileContent;
-            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-          case 3:
-            
-            if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
-              message = prefixMsg + "File " + fileName + " is already opened by another process";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-              break;
-            }
-
-            // write file
-            message = prefixMsg + "File " + fileName + " written";
-            if (memory.storeFile(fileName, content)) {
-              message = prefixMsg + "File " + fileName + " written";
-            } else {
-              message = prefixMsg + "File " + fileName + " not stored";
-            }
-
-            break;
-          case 4:
-            // close file
-            message = prefixMsg + "File " + fileName + " closed";
-            process.getPCB().getOpenFiles().remove(fileName);
-            memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-            break;
-          case 5:
-            // delete file
-            message = prefixMsg + "File " + fileName + " Deleted";
-            process.getPCB().getOpenFiles().remove(fileName);
-            memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-            memory.freeFile(fileName);
-            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-            break;
-
-          default:
-            break;
-        }
+      case _21H:
+        handleFileManagement(coreId, process, prefixMsg);
         break;
-      case _20H: // terminates process
-        process.updateState(ProcessState.TERMINATED);
-        memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, getStats(process.getProcessId()), process.getProcessId()));
+      case _20H:
+        terminateProcess(coreId, process);
         break;
-      case _10H: // prints dx
-        int dx = registers[coreId].get(Register.DX);
-        message = prefixMsg + "DX = " + dx;
-        InterruptQueue.addMessage(new InterruptMessage(coreId, code, message, process.getProcessId()));
+      case _10H:
+        printDxValue(coreId, process);
         break;
-      case _09H: // input of a number between 0 and 255
-
-        // send message to console
-        message = prefixMsg + "Input requested";
-        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-
-        InterruptQueue.addMessage(new InterruptMessage(coreId, code, "Input requested", process.getProcessId()));
-        process.updateState(ProcessState.WAITING);
-        CompletableFuture<String> inputFuture = UserInputHandler.requestInput(process.getProcessId());
-        inputFuture.thenAccept(input -> {
-          
-          // prints that the input was received
-          try {
-            int inputInt = Integer.parseInt(input);
-            if (inputInt < 0 || inputInt > 255) {
-              String msg = prefixMsg + "The input must be a number between 0 and 255";
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
-            }
-            else {
-              String msg = prefixMsg + "Input received: " + input;
-              InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
-              registers[coreId].put(Register.DX, inputInt);
-            }
-          } catch (NumberFormatException e) {
-            String msg = prefixMsg + "Invalid input";
-            InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
-          }
-          process.updateState(ProcessState.RUNNING);
-          memory.updateBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
-        });
+      case _09H:
+        handleNumericInput(coreId, process, prefixMsg);
         break;
-      
       case _08H:
-        // input of a string
-        message = prefixMsg + "Input requested";
-        InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId()));
-
-        InterruptQueue.addMessage(new InterruptMessage(coreId, code, "Input requested", process.getProcessId()));
-        process.updateState(ProcessState.WAITING);
-        CompletableFuture<String> inputFutureString = UserInputHandler.requestInput(process.getProcessId());
-        inputFutureString.thenAccept(input -> {
-          String msg = prefixMsg + "Input received: " + input;
-          InterruptQueue.addMessage(new InterruptMessage(coreId, InterruptCode._10H, msg, process.getProcessId()));
-
-          int storedAddr = memory.storeString(input);
-          registers[coreId].put(Register.BX, storedAddr);
-          process.updateState(ProcessState.RUNNING);
-          memory.updateBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
-        });
+        handleStringInput(coreId, process, prefixMsg);
         break;
     }
   }
 
+  /**
+   * Handles file management operations for the specified core.
+   *
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void handleFileManagement(int coreId, Process process, String prefixMsg) {
+    int axValue = registers[coreId].get(Register.AX);
+    int bxValue = registers[coreId].get(Register.BX);
+    int cxValue = registers[coreId].get(Register.CX);
+
+    String fileName = memory.getString(bxValue);
+    String content = memory.getString(cxValue);
+
+    switch (axValue) {
+      case 0:
+        createFile(coreId, process, fileName, prefixMsg);
+        break;
+      case 1:
+        openFile(coreId, process, fileName, prefixMsg);
+        break;
+      case 2:
+        readFile(coreId, process, fileName, prefixMsg);
+        break;
+      case 3:
+        writeFile(coreId, process, fileName, content, prefixMsg);
+        break;
+      case 4:
+        closeFile(coreId, process, fileName, prefixMsg);
+        break;
+      case 5:
+        deleteFile(coreId, process, fileName, prefixMsg);
+        break;
+    }
+  }
+
+  /**
+   * Creates a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * If the file already exists, sends an error message.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to create
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void createFile(int coreId, Process process, String fileName, String prefixMsg) {
+    memory.createFile(fileName);
+    String message = prefixMsg + "Archivo " + fileName + " creado";
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Opens a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * If the file is already opened by another process, sends an error message.
+   * If the file does not exist, sends an error message.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to open
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void openFile(int coreId, Process process, String fileName, String prefixMsg) {
+    if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+      String message = prefixMsg + "El archivo " + fileName + " ya está abierto por otro proceso";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
+    String existingFile = memory.getFile(fileName);
+    if (existingFile == null) {
+      String message = prefixMsg + "El archivo " + fileName + " no existe";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
+    process.getPCB().getOpenFiles().add(fileName);
+    updateProcessBCP(process);
+    String message = prefixMsg + "Archivo " + fileName + " abierto";
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Reads the content of a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * If the file is already opened by another process, sends an error message.
+   * If the file does not exist, sends an error message.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to read
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void readFile(int coreId, Process process, String fileName, String prefixMsg) {
+    if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+      String message = prefixMsg + "El archivo " + fileName + " ya está abierto por otro proceso";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
+    String fileContent = memory.getFile(fileName);
+    if (fileContent == null) {
+      String message = prefixMsg + "El archivo " + fileName + " no existe";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
+    String message = prefixMsg + "Contenido del archivo " + fileName + ": " + fileContent;
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Writes content to a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * If the file is already opened by another process, sends an error message.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to write
+   * @param content   the content to write to the file
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void writeFile(int coreId, Process process, String fileName, String content, String prefixMsg) {
+    if (fileOpenedByOtherProcess(fileName, process.getProcessId())) {
+      String message = prefixMsg + "El archivo " + fileName + " ya está abierto por otro proceso";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
+    String message = memory.storeFile(fileName, content)
+        ? prefixMsg + "Archivo " + fileName + " escrito"
+        : prefixMsg + "Archivo " + fileName + " no almacenado";
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Closes a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to close
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void closeFile(int coreId, Process process, String fileName, String prefixMsg) {
+    process.getPCB().getOpenFiles().remove(fileName);
+    updateProcessBCP(process);
+    String message = prefixMsg + "Archivo " + fileName + " cerrado";
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Deletes a file with the specified name.
+   * Sends an interrupt message with the result of the operation.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param fileName  the name of the file to delete
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void deleteFile(int coreId, Process process, String fileName, String prefixMsg) {
+    process.getPCB().getOpenFiles().remove(fileName);
+    updateProcessBCP(process);
+    memory.freeFile(fileName);
+    String message = prefixMsg + "Archivo " + fileName + " eliminado";
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  // ------------------------------
+  // Utility functions
+
+  /**
+   * Just terminates the process.
+   * And sends an interrupt message with the stats of the process.
+   * @param coreId  the ID of the core
+   * @param process the process to terminate
+   */
+  private void terminateProcess(int coreId, Process process) {
+    process.updateState(ProcessState.TERMINATED);
+    updateProcessBCP(process);
+    sendInterruptMessage(coreId, InterruptCode._10H, getStats(process.getProcessId()), process.getProcessId());
+  }
+
+  /**
+   * prints the value of the DX register. From the interrupt.
+   * @param coreId  the ID of the core
+   * @param process the process to terminate
+   */
+  private void printDxValue(int coreId, Process process) {
+    int dx = registers[coreId].get(Register.DX);
+    String message = "[ Core " + coreId + " ] >> DX = " + dx;
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+  }
+
+  /**
+   * Handles the numeric input for the process.
+   * Sends an interrupt message requesting input and then processes the input.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void handleNumericInput(int coreId, Process process, String prefixMsg) {
+    String requestMessage = prefixMsg + "Entrada solicitada";
+    sendInterruptMessage(coreId, InterruptCode._10H, requestMessage, process.getProcessId());
+    sendInterruptMessage(coreId, InterruptCode._09H, "Entrada solicitada", process.getProcessId());
+
+    process.updateState(ProcessState.WAITING);
+    CompletableFuture<String> inputFuture = UserInputHandler.requestInput(process.getProcessId());
+    inputFuture.thenAccept(input -> processNumericInput(coreId, process, input, prefixMsg));
+  }
+
+  /**
+   * Processes the numeric input for the process.
+   * Sends an interrupt message with the result of the operation.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param input     the input value
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void processNumericInput(int coreId, Process process, String input, String prefixMsg) {
+    try {
+      int inputInt = Integer.parseInt(input);
+      if (inputInt < 0 || inputInt > 255) {
+        String message = prefixMsg + "La entrada debe ser un número entre 0 y 255";
+        sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      } else {
+        String message = prefixMsg + "Entrada recibida: " + input;
+        sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+        registers[coreId].put(Register.DX, inputInt);
+      }
+    } catch (NumberFormatException e) {
+      String message = prefixMsg + "Entrada inválida";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+    }
+    process.updateState(ProcessState.RUNNING);
+    updateProcessBCP(process);
+  }
+
+  /**
+   * Handles the string input for the process.
+   * Sends an interrupt message requesting input and then processes the input.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void handleStringInput(int coreId, Process process, String prefixMsg) {
+    String requestMessage = prefixMsg + "Entrada solicitada";
+    sendInterruptMessage(coreId, InterruptCode._10H, requestMessage, process.getProcessId());
+    sendInterruptMessage(coreId, InterruptCode._08H, "Entrada solicitada", process.getProcessId());
+
+    process.updateState(ProcessState.WAITING);
+    CompletableFuture<String> inputFuture = UserInputHandler.requestInput(process.getProcessId());
+    inputFuture.thenAccept(input -> processStringInput(coreId, process, input, prefixMsg));
+  }
+
+  /**
+   * Processes the string input for the process.
+   * Sends an interrupt message with the result of the operation.
+   * 
+   * @param coreId    the ID of the core
+   * @param process   the process associated with the core
+   * @param input     the input value
+   * @param prefixMsg the prefix message for the interrupt
+   */
+  private void processStringInput(int coreId, Process process, String input, String prefixMsg) {
+    String message = prefixMsg + "Entrada recibida: " + input;
+    sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+
+    int storedAddr = memory.storeString(input);
+    registers[coreId].put(Register.BX, storedAddr);
+    process.updateState(ProcessState.RUNNING);
+    updateProcessBCP(process);
+  }
+
+  /**
+   * Sends an interrupt message with the specified code, message, and process ID.
+   * 
+   * @param coreId    the ID of the core
+   * @param code      the interrupt code
+   * @param message   the message to send
+   * @param processId the ID of the process
+   */
+  private void sendInterruptMessage(int coreId, InterruptCode code, String message, int processId) {
+    InterruptQueue.addMessage(new InterruptMessage(coreId, code, message, processId));
+  }
+
+  /**
+   * Updates the BCP of the process in memory. With whatever changes were made.
+   * @param process the process to update
+   */
+  private void updateProcessBCP(Process process) {
+    memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
+  }
+
+  /**
+   * Check if a file name is already opened by another process.
+   * @param fileName  the name of the file
+   * @param processId the ID of the process to exclude
+   * @return true if the file is opened by another process, false otherwise
+   */
   private boolean fileOpenedByOtherProcess(String fileName, int processId) {
     for (int i = 0; i < NUM_CORES; i++) {
       if (runningProcesses[i] != null && runningProcesses[i].getProcessId() != processId) {
@@ -490,16 +746,20 @@ public class CPU {
     return false;
   }
 
+  /**
+   * Updates the flags based on the result of an operation.
+   * @param result the result of the operation
+   */
   private void updateFlags(int result) {
     zeroFlag = result == 0;
     // signFlag = result < 0;
   }
 
-  public void handleIOCompletion(Process process) {
-    process.updateState(ProcessState.RUNNING);
-    memory.updateBCP("P" +  process.getProcessId(), process.getPCB().toJsonString());
-  }
-
+  /**
+   * Checks if a core is available.
+   * @param coreId the ID of the core
+   * @return true if the core is available, false otherwise. A core is available if it is not running a process.
+   */
   public boolean isCoreAvailable(int coreId) {
     return runningProcesses[coreId] == null;
   }
@@ -540,7 +800,8 @@ public class CPU {
 
   public String getStats(int index) {
     Process currentProcess = runningProcesses[index];
-    if(currentProcess == null) return "";
+    if (currentProcess == null)
+      return "";
     String prefixMsg = "[ Core " + index + " ] >> ";
     long res = currentProcess.getPCB().getCpuTimeUsed();
 
@@ -556,7 +817,8 @@ public class CPU {
     DateTimeFormatter formatterN = DateTimeFormatter.ofPattern("HH:mm:ss:ms");
     String formattedTimeN = adjustedTimeN.format(formatterN);
 
-    String message = prefixMsg + "Info:   \nStart time: " + formattedTime+ " \nFinish time: "+ formattedTimeN+ "\nTotal core usage time: " + res + " Sec";
+    String message = prefixMsg + "Info:   \nStart time: " + formattedTime + " \nFinish time: " + formattedTimeN
+        + "\nTotal core usage time: " + res + " Sec";
     return message;
   }
 
@@ -564,6 +826,10 @@ public class CPU {
     return getStats(id);
   }
 
+  /**
+   * Terminates the process running on the specified core.
+   * @param index the index of the core
+   */
   public void dispatcher(int index) {
     if (index >= 0 && index < NUM_CORES) {
       Process currentProcess = runningProcesses[index];
@@ -571,25 +837,37 @@ public class CPU {
       memory.updateBCP("P" + currentProcess.getProcessId(), currentProcess.getPCB().toJsonString());
       String id = "P" + currentProcess.getProcessId();
       if (!memory.deallocateMemory(id)) {
-        System.out.println("Error deallocating memory for process " + id);
+        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
+            "Error deallocating memory for process " + id, currentProcess.getProcessId()));
       }
       if (!memory.deleteBCP(id + "_bcp")) {
-        System.out.println("Error freeing BCP for process " + id);
+        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
+            "Error deleting BCP for process " + id, currentProcess.getProcessId()));
       }
       if (!memory.deallocateStack(id)) {
-        System.out.println("Error deallocating stack for process " + id);
+        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
+            "Error deallocating stack for process " + id, currentProcess.getProcessId()));
+      }
+      if (!memory.freeBCPFromOS(id)) {
+        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
+            "Error freeing BCP from OS for process " + id, currentProcess.getProcessId()));
       }
 
-      InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H, getStats(index), currentProcess.getProcessId()));
+      InterruptQueue
+          .addMessage(new InterruptMessage(index, InterruptCode._10H, getStats(index), currentProcess.getProcessId()));
 
       runningProcesses[index] = null;
       resetRegister(index);
     } else {
-      String message  = ("Index out of bounds: " + index);
-      InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H, message, runningProcesses[0].getProcessId()));
+      String message = ("Index out of bounds: " + index);
+      InterruptQueue
+          .addMessage(new InterruptMessage(index, InterruptCode._10H, message, runningProcesses[0].getProcessId()));
     }
   }
 
+  /**
+   * Terminates all processes and resets the CPU state with the memory.
+   */
   public void fullReset() {
     // Reset all cores, processes, and registers
     for (int i = 0; i < NUM_CORES; i++) {
@@ -610,11 +888,10 @@ public class CPU {
     int osSize = memory.getOsSize();
 
     this.memory = new MemoryManager(
-      mainMemorySize,
-      secondaryMemorySize,
-      kernelSize,
-      osSize
-    );
+        mainMemorySize,
+        secondaryMemorySize,
+        kernelSize,
+        osSize);
 
     // Reset interrupt queue
     InterruptQueue.clear();

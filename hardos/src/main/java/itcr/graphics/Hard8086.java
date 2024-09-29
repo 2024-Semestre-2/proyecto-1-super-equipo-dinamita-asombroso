@@ -15,6 +15,11 @@ import java.util.concurrent.Executors;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 
+/**
+ * Hard8086 class represents a custom floating window that simulates the
+ * Hard8086 environment.
+ * It includes registers, a console, and a memory map.
+ */
 public class Hard8086 extends FloatingWindow<Scheduler> {
   private Map<Integer, JTextArea> registersAreas;
   private JTextArea consoleArea;
@@ -27,6 +32,13 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
 
   private JTextArea[] coreLabels;
 
+  /**
+   * Constructor for Hard8086.
+   * Initializes the Hard8086 simulator window.
+   *
+   * @param parent    the parent frame
+   * @param scheduler the scheduler to manage the simulation
+   */
   public Hard8086(JFrame parent, Scheduler scheduler) {
     super(parent, "Hard8086 Simulator", scheduler);
     setSize(950, 600);
@@ -35,6 +47,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     startInterruptHandler();
   }
 
+  /**
+   * Initializes the components of the Hard8086 simulator.
+   */
   @Override
   protected void initComponents() {
     JTabbedPane tabbedPane = new JTabbedPane();
@@ -43,20 +58,24 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     JPanel mainPanel = createMainTab();
     tabbedPane.addTab("Main", mainPanel);
 
-
     JPanel statsPanel = new JPanel();
-    statsPanel.setLayout(new GridLayout(NUM_CORES, 1)); 
-    
+    statsPanel.setLayout(new GridLayout(NUM_CORES, 1));
+
     this.coreLabels = new JTextArea[NUM_CORES];
     for (int i = 0; i < NUM_CORES; i++) {
-        coreLabels[i] = new JTextArea("");
-        statsPanel.add(coreLabels[i]);
+      coreLabels[i] = new JTextArea("");
+      statsPanel.add(coreLabels[i]);
     }
     tabbedPane.addTab("Stats", statsPanel);
-    
+
     add(tabbedPane, BorderLayout.CENTER);
   }
 
+  /**
+   * Creates the main tab panel.
+   *
+   * @return the main tab panel
+   */
   private JPanel createMainTab() {
     JPanel mainPanel = new JPanel(new BorderLayout());
 
@@ -134,6 +153,11 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     return mainPanel;
   }
 
+  /**
+   * Updates the memory map displayed in the memory map tree.
+   *
+   * @param e the action event
+   */
   private void updateMemoryMap(ActionEvent e) {
     MemoryMap memoryMap = controller.getMemoryManager().getMainMemoryMap();
     DefaultMutableTreeNode root = new DefaultMutableTreeNode("Memory");
@@ -177,6 +201,12 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     expandAllNodes(memoryMapTree, 0, -1);
   }
 
+  /**
+   * Adds a memory section to the parent node in the memory map tree.
+   *
+   * @param parent  the parent node
+   * @param section the memory section to add
+   */
   private void addMemorySection(DefaultMutableTreeNode parent, MemoryMap.MemorySection section) {
     StringBuilder nodeText = new StringBuilder();
     nodeText.append(String.format("%s (%d - %d)", section.name, section.start, section.end));
@@ -193,22 +223,25 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     }
   }
 
+  /**
+   * Loads files into the memory.
+   *
+   * @param e the action event
+   */
   private void loadFiles(ActionEvent e) {
     FileLoaderDialog dialog = new FileLoaderDialog((JFrame) SwingUtilities.getWindowAncestor(this), controller);
     dialog.setVisible(true);
     List<String> selectedFiles = dialog.getSelectedFiles();
 
-    // controller.getMemoryManager().printMemoryMap();
-
     if (!selectedFiles.isEmpty()) {
       StringBuilder sb = new StringBuilder("Selected files:\n");
       for (String fileName : selectedFiles) {
-          String strInstructions = controller.getFileContent(fileName);
-          String assemblerErrors = Assembler.validateFormat(strInstructions);
-          if (assemblerErrors != null) {
-            JOptionPane.showMessageDialog(this, assemblerErrors, "Error " + fileName, JOptionPane.ERROR_MESSAGE);
-            return;
-          }
+        String strInstructions = controller.getFileContent(fileName);
+        String assemblerErrors = Assembler.validateFormat(strInstructions);
+        if (assemblerErrors != null) {
+          JOptionPane.showMessageDialog(this, assemblerErrors, "Error " + fileName, JOptionPane.ERROR_MESSAGE);
+          return;
+        }
 
         String[] instructions = strInstructions.split("\n");
         itcr.model.Process process = createProcess(instructions);
@@ -221,10 +254,19 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     }
   }
 
+  /**
+   * Creates a process from the given instructions.
+   *
+   * @param instructions the instructions for the process
+   * @return the created process
+   */
   private itcr.model.Process createProcess(String[] instructions) {
     int processSize = 0;
     for (String instruction : instructions) {
-      processSize += instruction.length();
+      if (instruction.substring(0, 2).equals("//")) {
+        continue;
+      }
+      processSize += instruction.split("//")[0].length();
     }
 
     String processId = "P" + itcr.model.Process.processCounter;
@@ -232,7 +274,11 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     int baseAddress = this.controller.getMemoryManager().allocateMemory(processId, processSize);
 
     for (int i = 0; i < instructions.length; i++) {
-      controller.getMemoryManager().storeInstruction(processId, instructions[i]);
+      if (instructions[i].substring(0, 2).equals("//")) {
+        continue;
+      }
+
+      controller.getMemoryManager().storeInstruction(processId, instructions[i].split("//")[0]);
     }
 
     int qtyInstructions = controller.getMemoryManager().getQtyInstructions(processId);
@@ -250,6 +296,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     return process;
   }
 
+  /**
+   * Starts the interrupt handler.
+   */
   private void startInterruptHandler() {
     interruptExecutor.submit(() -> {
       while (!Thread.currentThread().isInterrupted()) {
@@ -263,6 +312,11 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     });
   }
 
+  /**
+   * Handles an interrupt message.
+   *
+   * @param message the interrupt message
+   */
   private void handleInterrupt(InterruptMessage message) {
     SwingUtilities.invokeLater(() -> {
       switch (message.getCode()) {
@@ -281,55 +335,121 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     });
   }
 
+  /**
+   * Executes all instructions.
+   *
+   * @param e the action event
+   */
   private void executeAllInstructions(ActionEvent e) {
-    try {
-      int count = 10;
-      while (count != 0) {
-        System.out.println("sjjdsdsdnjshndbsndksndksnjkdnj=================================================snjkn");
-        executeNextInstruction(e);
-
-        Thread.sleep(1000);
-        count--;
+    new SwingWorker<Void, Void>() {
+      @Override
+      protected Void doInBackground() throws Exception {
+        int count = 10;
+        while (count != 0 && !isCancelled()) {
+          executeNextInstructionInBackground();
+          Thread.sleep(1000);
+          count--;
+        }
+        return null;
       }
-      consoleArea.append("All instructions executed==\n");
+
+      @Override
+      protected void done() {
+        SwingUtilities.invokeLater(() -> {
+          consoleArea.append("All instructions executed==\n");
+          updateRegistersDisplay();
+          updateMemoryMap(e);
+          updateCoreLabels();
+        });
+      }
+    }.execute();
+  }
+
+  /**
+   * Executes the next instruction in the background.
+   */
+  private void executeNextInstructionInBackground() {
+    try {
+      if (true) { // Change this condition as needed
+        if (firstStep) {
+          firstStep = false;
+          controller.executeInstruction();
+        }
+        controller.executeInstruction();
+        SwingUtilities.invokeLater(this::updateGUI);
+      }
     } catch (Exception ex) {
-      consoleArea.append("Error: " + ex.getMessage() + "\n");
+      final String errorMessage = ex.getMessage();
+      SwingUtilities.invokeLater(() -> consoleArea.append("Error: " + errorMessage + "\n"));
     }
   }
 
+  /**
+   * Updates the GUI components.
+   */
+  private void updateGUI() {
+    updateRegistersDisplay();
+    updateMemoryMap(null);
+    updateCoreLabels();
+  }
+
+  /**
+   * Executes the next instruction.
+   *
+   * @param e the action event
+   */
   private synchronized void executeNextInstruction(ActionEvent e) {
     try {
       if (true) {
-        if(firstStep) {this.firstStep = false; controller.executeInstruction();}
+        if (firstStep) {
+          this.firstStep = false;
+          controller.executeInstruction();
+        }
         controller.executeInstruction();
         updateRegistersDisplay();
         updateMemoryMap(e);
         updateCoreLabels();
-      } else { // review
-        consoleArea.append("No more instructions to execute\n");
       }
     } catch (Exception ex) {
       consoleArea.append("Error: " + ex.getMessage() + "\n");
     }
   }
 
+  /**
+   * Cleans the console area.
+   *
+   * @param e the action event
+   */
   private void cleanConsole(ActionEvent e) {
     consoleArea.setText("");
   }
 
+  /**
+   * Updates the display of registers.
+   */
   private void updateRegistersDisplay() {
     for (int i = 0; i < NUM_CORES; i++) {
       JTextArea area = registersAreas.get(i);
-      area.setText(controller.getRegisters(i) + "\n" + controller.getRegisters(0,i));
+      area.setText(controller.getRegisters(i) + "\n" + controller.getRegisters(0, i));
     }
   }
 
+  /**
+   * Updates the core labels.
+   */
   private void updateCoreLabels() {
     for (int i = 0; i < NUM_CORES; i++) {
-        coreLabels[i].setText(controller.getCoreStatus(i));
+      coreLabels[i].setText(controller.getCoreStatus(i));
     }
   }
 
+  /**
+   * Expands all nodes in the JTree.
+   *
+   * @param tree          the JTree to expand
+   * @param startingIndex the starting index
+   * @param rowCount      the row count
+   */
   private void expandAllNodes(JTree tree, int startingIndex, int rowCount) {
     for (int i = startingIndex; i < rowCount; ++i) {
       tree.expandRow(i);
@@ -340,14 +460,27 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     }
   }
 
+  /**
+   * Prints a message to the console area.
+   *
+   * @param message the message to print
+   */
   public void printToConsole(String message) {
     consoleArea.append(message + "\n");
   }
 
+  /**
+   * Reads input from the console.
+   *
+   * @return the input from the console
+   */
   public String readFromConsole() {
     return JOptionPane.showInputDialog(this, "Enter input:");
   }
 
+  /**
+   * Disposes the Hard8086 window and shuts down the interrupt executor.
+   */
   @Override
   public void dispose() {
     interruptExecutor.shutdownNow();

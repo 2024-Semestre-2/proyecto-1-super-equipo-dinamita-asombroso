@@ -1,0 +1,7 @@
+{
+  "kernelSize" : 1024,
+  "osSize" : 2048,
+  "mainMemorySize" : 8192,
+  "secondaryMemorySize" : 16384,
+  "virtualMemorySize" : 327
+}

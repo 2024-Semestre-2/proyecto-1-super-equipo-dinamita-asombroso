@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
@@ -22,6 +23,7 @@ public class CPU {
   private String[] instructionRegisters;
   private EnumMap<Register, Integer>[] registers;
   public MemoryManager memory;
+  public Map<String, String> statsForProcesses = new HashMap<>();
 
   // Flags
   private boolean zeroFlag = false;
@@ -85,6 +87,7 @@ public class CPU {
    */
   public void executeInstruction(int coreId) throws Exception {
     Process process = runningProcesses[coreId];
+
     String instruction = getNextInstruction(coreId);
     instructionRegisters[coreId] = instruction;
     if (instruction == null) {
@@ -316,8 +319,8 @@ public class CPU {
       updateFlags(result);
     } else {
       Register reg = Register.valueOf(parts[1]);
-      int result = registers[coreId].get(Register.AC) - registers[coreId].get(reg);
-      registers[coreId].put(Register.AC, result);
+      int result = registers[coreId].get(reg) - 1;
+      registers[coreId].put(reg, result);
       updateFlags(result);
     }
   }
@@ -334,8 +337,8 @@ public class CPU {
       updateFlags(result);
     } else {
       Register reg = Register.valueOf(parts[1]);
-      int result = registers[coreId].get(Register.AC) + registers[coreId].get(reg);
-      registers[coreId].put(Register.AC, result);
+      int result = registers[coreId].get(reg) + 1;
+      registers[coreId].put(reg, result);
       updateFlags(result);
     }
   }
@@ -605,17 +608,18 @@ public class CPU {
   /**
    * Just terminates the process.
    * And sends an interrupt message with the stats of the process.
+   * 
    * @param coreId  the ID of the core
    * @param process the process to terminate
    */
   private void terminateProcess(int coreId, Process process) {
     process.updateState(ProcessState.TERMINATED);
     updateProcessBCP(process);
-    sendInterruptMessage(coreId, InterruptCode._10H, getStats(process.getProcessId()), process.getProcessId());
   }
 
   /**
    * prints the value of the DX register. From the interrupt.
+   * 
    * @param coreId  the ID of the core
    * @param process the process to terminate
    */
@@ -634,9 +638,9 @@ public class CPU {
    * @param prefixMsg the prefix message for the interrupt
    */
   private void handleNumericInput(int coreId, Process process, String prefixMsg) {
-    String requestMessage = prefixMsg + "Entrada solicitada";
+    String requestMessage = prefixMsg + "Entrada numérica solicitada";
     sendInterruptMessage(coreId, InterruptCode._10H, requestMessage, process.getProcessId());
-    sendInterruptMessage(coreId, InterruptCode._09H, "Entrada solicitada", process.getProcessId());
+    sendInterruptMessage(coreId, InterruptCode._09H, "Entrada numérica solicitada", process.getProcessId());
 
     process.updateState(ProcessState.WAITING);
     CompletableFuture<String> inputFuture = UserInputHandler.requestInput(process.getProcessId());
@@ -722,6 +726,7 @@ public class CPU {
 
   /**
    * Updates the BCP of the process in memory. With whatever changes were made.
+   * 
    * @param process the process to update
    */
   private void updateProcessBCP(Process process) {
@@ -730,6 +735,7 @@ public class CPU {
 
   /**
    * Check if a file name is already opened by another process.
+   * 
    * @param fileName  the name of the file
    * @param processId the ID of the process to exclude
    * @return true if the file is opened by another process, false otherwise
@@ -748,6 +754,7 @@ public class CPU {
 
   /**
    * Updates the flags based on the result of an operation.
+   * 
    * @param result the result of the operation
    */
   private void updateFlags(int result) {
@@ -757,8 +764,10 @@ public class CPU {
 
   /**
    * Checks if a core is available.
+   * 
    * @param coreId the ID of the core
-   * @return true if the core is available, false otherwise. A core is available if it is not running a process.
+   * @return true if the core is available, false otherwise. A core is available
+   *         if it is not running a process.
    */
   public boolean isCoreAvailable(int coreId) {
     return runningProcesses[coreId] == null;
@@ -777,6 +786,17 @@ public class CPU {
 
   public void saveProcessContext(int coreId) {
     Process process = runningProcesses[coreId];
+
+    // if (process == null)
+    //   return;
+    // if (process.getPCB() == null)
+    //   return;
+
+    // if (process.getPCB().getState() == ProcessState.TERMINATED) {
+    //   // dispatcher(coreId);
+    //   return;
+    // }
+
     for (Register reg : Register.values()) {
       process.getPCB().setRegister(reg, registers[coreId].get(reg));
     }
@@ -803,22 +823,26 @@ public class CPU {
     if (currentProcess == null)
       return "";
     String prefixMsg = "[ Core " + index + " ] >> ";
-    long res = currentProcess.getPCB().getCpuTimeUsed();
 
     Instant start = currentProcess.getPCB().getStartTime();
     LocalDateTime localDateTime = LocalDateTime.ofInstant(start, ZoneId.of("UTC"));
     LocalDateTime adjustedTime = localDateTime.minusHours(6);
-    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:ms");
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:SSS");
     String formattedTime = adjustedTime.format(formatter);
-    //
+
     Instant nowUtc = Instant.now();
     LocalDateTime localDateTimeN = LocalDateTime.ofInstant(nowUtc, ZoneId.of("UTC"));
     LocalDateTime adjustedTimeN = localDateTimeN.minusHours(6);
-    DateTimeFormatter formatterN = DateTimeFormatter.ofPattern("HH:mm:ss:ms");
-    String formattedTimeN = adjustedTimeN.format(formatterN);
+    String formattedTimeN = adjustedTimeN.format(formatter);
 
-    String message = prefixMsg + "Info:   \nStart time: " + formattedTime + " \nFinish time: " + formattedTimeN
-        + "\nTotal core usage time: " + res + " Sec";
+    long diffInMillis = Duration.between(adjustedTime, adjustedTimeN).toMillis();
+    String totalTime = String.format("%d.%d  segundos", diffInMillis / 1000, diffInMillis % 1000);
+
+    String message = 
+      prefixMsg + "Info:   \nStart time: " + formattedTime + 
+      "\nFinish time: " + formattedTimeN + 
+      "\nTotal core usage time: " + totalTime +
+      "\nProcess ID: " + currentProcess.getProcessId();
     return message;
   }
 
@@ -828,6 +852,7 @@ public class CPU {
 
   /**
    * Terminates the process running on the specified core.
+   * 
    * @param index the index of the core
    */
   public void dispatcher(int index) {
@@ -840,10 +865,6 @@ public class CPU {
         InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
             "Error deallocating memory for process " + id, currentProcess.getProcessId()));
       }
-      if (!memory.deleteBCP(id + "_bcp")) {
-        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
-            "Error deleting BCP for process " + id, currentProcess.getProcessId()));
-      }
       if (!memory.deallocateStack(id)) {
         InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
             "Error deallocating stack for process " + id, currentProcess.getProcessId()));
@@ -855,6 +876,8 @@ public class CPU {
 
       InterruptQueue
           .addMessage(new InterruptMessage(index, InterruptCode._10H, getStats(index), currentProcess.getProcessId()));
+
+      this.statsForProcesses.put("P" + currentProcess.getProcessId(), getStats(index));
 
       runningProcesses[index] = null;
       resetRegister(index);
@@ -898,6 +921,9 @@ public class CPU {
 
     // Reset user input handler
     UserInputHandler.reset();
+
+    // Reset process stats
+    this.statsForProcesses.clear();
   }
 
   private boolean isNumeric(String str) {

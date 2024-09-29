@@ -140,9 +140,10 @@ public class Scheduler {
                 cpu.executeInstruction(coreId);
                 if (pcb.getState() != ProcessState.WAITING) {
                   pcb.incrementProgramCounter();
-                  // memoryManager.storeBCP("P" + process.getPCB().getProcessId(),
-                  // pcb.toJsonString()); 6
                 }
+              }
+              if (pcb.getState() == ProcessState.TERMINATED) {
+                cpu.dispatcher(coreId);
               }
             }
           }

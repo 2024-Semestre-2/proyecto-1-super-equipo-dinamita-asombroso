@@ -29,8 +29,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private final int NUM_CORES = 5;
   private boolean firstStep = true;
   public DesktopScreenController desktopScreenControllerRef = null;
+  private ProcessTimelinePanel statsPanel;
 
-  private JTextArea[] coreLabels;
+  private JTabbedPane tabbedPane;
 
   /**
    * Constructor for Hard8086.
@@ -58,15 +59,13 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     JPanel mainPanel = createMainTab();
     tabbedPane.addTab("Main", mainPanel);
 
-    JPanel statsPanel = new JPanel();
-    statsPanel.setLayout(new GridLayout(NUM_CORES, 1));
+    // Stats Tab
+    statsPanel = new ProcessTimelinePanel();
+    statsPanel.setVisible(true);
+    statsPanel.setPreferredSize(new Dimension(800, 500));
+    tabbedPane.addTab("Stats", new JScrollPane(statsPanel));
 
-    this.coreLabels = new JTextArea[NUM_CORES];
-    for (int i = 0; i < NUM_CORES; i++) {
-      coreLabels[i] = new JTextArea("");
-      statsPanel.add(coreLabels[i]);
-    }
-    tabbedPane.addTab("Stats", statsPanel);
+    this.tabbedPane = tabbedPane;
 
     add(tabbedPane, BorderLayout.CENTER);
   }
@@ -151,6 +150,13 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     updateMemoryMap(null);
 
     return mainPanel;
+  }
+
+  private void updateStatsTab() {
+    SwingUtilities.invokeLater(() -> {
+      Map<String, String> currentStatsForProcesses = controller.cpu.statsForProcesses;
+      statsPanel.updateStats(currentStatsForProcesses);
+    });
   }
 
   /**
@@ -359,7 +365,6 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
           consoleArea.append("All instructions executed==\n");
           updateRegistersDisplay();
           updateMemoryMap(e);
-          updateCoreLabels();
         });
       }
     }.execute();
@@ -390,7 +395,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private void updateGUI() {
     updateRegistersDisplay();
     updateMemoryMap(null);
-    updateCoreLabels();
+    updateStatsTab();
   }
 
   /**
@@ -408,9 +413,10 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
         controller.executeInstruction();
         updateRegistersDisplay();
         updateMemoryMap(e);
-        updateCoreLabels();
+        updateStatsTab();
       }
     } catch (Exception ex) {
+      System.out.println("Error: " + ex.getMessage());
       consoleArea.append("Error: " + ex.getMessage() + "\n");
     }
   }
@@ -431,15 +437,6 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     for (int i = 0; i < NUM_CORES; i++) {
       JTextArea area = registersAreas.get(i);
       area.setText(controller.getRegisters(i) + "\n" + controller.getRegisters(0, i));
-    }
-  }
-
-  /**
-   * Updates the core labels.
-   */
-  private void updateCoreLabels() {
-    for (int i = 0; i < NUM_CORES; i++) {
-      coreLabels[i].setText(controller.getCoreStatus(i));
     }
   }
 

@@ -9,8 +9,10 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 
 /**
- * The DesktopScreenController class manages the main desktop screen functionalities,
- * including loading initial files into memory, opening various system components,
+ * The DesktopScreenController class manages the main desktop screen
+ * functionalities,
+ * including loading initial files into memory, opening various system
+ * components,
  * and validating memory configurations.
  */
 public class DesktopScreenController {
@@ -36,18 +38,117 @@ public class DesktopScreenController {
    */
   public void loadInitialFilesInMemory() {
     String[] fileNames = {
-      "createfile.asm", "createfile1.asm", "createfile2.asm", "createfile3.asm",
-      "createfile5.asm", "createfile4.asm", "createfile7.asm", "createfile6.asm"
+        "suma_numeros.asm",
+        "contador_descendente.asm",
+        "calculo_sumatoria.asm",
+        "manejo_archivos.asm",
+        "comparacion_numeros.asm",
+        "entrada_salida.asm",
+        "operaciones_pila.asm",
+        "saltos_condicionales.asm"
     };
+
     String[] fileContent = {
-      "MOV AX, 3\nINT _08H\nMOV CX, BX\nINT _08H\nINT _21H",
-      "MOV AX, 1\nINT _08H\nINT _21H",
-      "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPUSH AX\nPOP BX\nPUSH AX",
-      "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nMOV DX, BX",
-      "MOV AX, 1\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX",
-      "MOV AX, 2\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nPUSH AX\nMOV CX, 100",
-      "MOV AX, 3\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX",
-      "MOV AX, 5\nMOV BX, AX\nMOV AX, 10\nPUSH AX\nMOV BX, 100\nMOV DX, BX"
+        // suma_numeros.asm
+        "// Suma dos números ingresados por el usuario\n" +
+            "INT _09H\n" +
+            "ADD DX\n" +
+            "INT _09H\n" +
+            "ADD DX\n" +
+            "STORE DX\n" +
+            "INT _10H\n" +
+            "INT _20H",
+
+        // contador_descendente.asm
+        "// Cuenta desde 10 hasta 0\n" +
+            "MOV AX, 10\n" +
+            "MOV BX, 0\n" +
+            "MOV DX, AX\n" +
+            "INT _10H\n" +
+            "DEC AX\n" +
+            "MOV DX, AX\n" +
+            "CMP AX, BX\n" +
+            "JNE -5\n" +
+            "INT _20H",
+
+        // calculo_sumatoria.asm
+        "// Calcula la sumatoria desde 1 hasta AX\n" +
+            "INT _09H\n" +
+            "MOV AX, DX\n" + // el usuario ingresa el valor de AX SUMATORIA(AX) = 1 + 2 + 3 + ... + AX
+            "MOV CX, AX\n" + // guardamos el valor de AX en CX para usarlo en el ciclo
+            "MOV BX, 1\n" + // el numero que se va a sumar
+            "ADD BX\n" + // Usamos BX para sumar al ACUMULADOR (donde se guarda la sumatoria)
+            "CMP BX, CX\n" + // comparamos si ya llegamos al valor de AX
+            "JE +3\n" + // si es igual, terminamos
+            "INC BX\n" + // si no, incrementamos BX
+            "JMP -4\n" + // volvemos al ciclo
+            "STORE DX\n" + // para imprimir el resultado
+            "INT _10H\n" + // imprimimos el resultado
+            "INT _20H", // terminamos
+
+        // manejo_archivos.asm
+        "// Crea, escribe, lee y elimina un archivo\n" +
+            "MOV AX, 0\n" +
+            "INT _08H\n" +
+            "INT _21H\n" +
+            "MOV AX, 3\n" +
+            "MOV CX, BX\n" +
+            "INT _08H\n" +
+            "INT _21H\n" +
+            "MOV AX, 2\n" +
+            "INT _21H\n" +
+            "MOV AX, 5\n" +
+            "INT _21H\n" +
+            "INT _20H",
+
+        // comparacion_numeros.asm
+        "// Compara dos números e imprime el mayor\n" +
+            "INT _09H\n" +
+            "MOV AX, DX\n" +
+            "INT _09H\n" +
+            "MOV BX, DX\n" +
+            "CMP AX, BX\n" +
+            "JE +4\n" +
+            "JNE +2\n" +
+            "MOV DX, AX\n" +
+            "JMP +2\n" +
+            "MOV DX, BX\n" +
+            "INT _10H\n" +
+            "INT _20H",
+
+        // entrada_salida.asm
+        "// Lee una cadena y la imprime\n" +
+            "INT _08H\n" +
+            "MOV AX, 2\n" +
+            "MOV CX, BX\n" +
+            "INT _21H\n" +
+            "INT _20H",
+
+        // operaciones_pila.asm
+        "// Realiza operaciones usando la pila\n" +
+            "MOV AX, 5\n" +
+            "PUSH AX\n" +
+            "MOV AX, 10\n" +
+            "PUSH AX\n" +
+            "POP BX\n" +
+            "POP AX\n" +
+            "ADD BX\n" +
+            "MOV DX, AX\n" +
+            "INT _10H\n" +
+            "INT _20H",
+
+        // saltos_condicionales.asm
+        "// Demuestra el uso de saltos condicionales\n" +
+            "MOV AX, 0\n" +
+            "MOV BX, 5\n" +
+            "CMP AX, BX\n" +
+            "JE +4\n" +
+            "INC AX\n" +
+            "CMP AX, BX\n" +
+            "JNE -3\n" +
+            "MOV DX, AX\n" +
+            "INT _10H\n" +
+            "INT _20H"
     };
 
     boolean allFilesStored = true;
@@ -102,7 +203,7 @@ public class DesktopScreenController {
    * Loads configuration from a file.
    *
    * @param configFilePath the path to the configuration file
-   * @param fileType the type of the configuration file
+   * @param fileType       the type of the configuration file
    */
   public void loadConfigurationFromFile(String configFilePath, String fileType) {
     try {
@@ -115,14 +216,15 @@ public class DesktopScreenController {
   /**
    * Validates the memory configuration.
    *
-   * @param kernelSize the size of the kernel
-   * @param osSize the size of the operating system
-   * @param mainMemorySize the size of the main memory
+   * @param kernelSize          the size of the kernel
+   * @param osSize              the size of the operating system
+   * @param mainMemorySize      the size of the main memory
    * @param secondaryMemorySize the size of the secondary memory
-   * @param virtualMemorySize the size of the virtual memory
+   * @param virtualMemorySize   the size of the virtual memory
    * @return an error message if the configuration is invalid, otherwise null
    */
-  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize) {
+  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize,
+      int virtualMemorySize) {
     if (kernelSize < 0 || osSize < 0 || mainMemorySize < 0 || secondaryMemorySize < 0 || virtualMemorySize < 0) {
       return "Los tamaños no pueden ser negativos";
     }
@@ -176,12 +278,13 @@ public class DesktopScreenController {
     memoryManager.setVirtualMemorySize(virtualMemorySize);
   }
 
-  public void changeScheduler (Scheduler scheduler) {
+  public void changeScheduler(Scheduler scheduler) {
     this.scheduler = scheduler;
     this.memoryManager = scheduler.cpu.memory;
   }
 
-  public void updateMemorySize(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize) {
+  public void updateMemorySize(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize,
+      int virtualMemorySize) {
     memoryManager.setKernelSize(kernelSize);
     memoryManager.setOsSize(osSize);
     memoryManager.setMainMemorySize(mainMemorySize);

@@ -1,17 +1,20 @@
 package itcr.model;
 
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.function.BiConsumer;
-
-import java.util.HashMap;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.EnumMap;
+import java.util.function.BiConsumer;
+
+import com.google.gson.JsonObject;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import java.time.Duration;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneId;
 
 /**
  * CPU class represents the central processing unit with multiple cores.
@@ -24,18 +27,16 @@ public class CPU {
   private EnumMap<Register, Integer>[] registers;
   public MemoryManager memory;
   public Map<String, String> statsForProcesses = new HashMap<>();
+  private int cpuId;
+  private Scheduler scheduler;
 
   // Flags
   private boolean zeroFlag = false;
-  // private boolean signFlag = false;
-  // private boolean carryFlag = false;
-  // private boolean overflowFlag = false;
 
-  /**
-   * Constructor for CPU.
-   * Initializes the CPU with the specified number of cores and sets up registers.
-   */
-  public CPU() {
+  public CPU(int cpuId, Scheduler scheduler, MemoryManager memoryManager) {
+    this.cpuId = cpuId;
+    this.scheduler = scheduler;
+    this.memory = memoryManager;
     runningProcesses = new Process[NUM_CORES];
     instructionRegisters = new String[NUM_CORES];
     registers = new EnumMap[NUM_CORES];
@@ -55,18 +56,6 @@ public class CPU {
   }
 
   /**
-   * Resets the registers for a specific core.
-   *
-   * @param index the index of the core
-   */
-  private void resetRegister(int index) {
-    registers[index] = new EnumMap<>(Register.class);
-    for (Register reg : Register.values()) {
-      registers[index].put(reg, 0);
-    }
-  }
-
-  /**
    * Assigns a process to a specific core.
    *
    * @param process the process to assign
@@ -79,6 +68,14 @@ public class CPU {
     }
   }
 
+  public void executeInstructionOnAllCores() throws Exception {
+    for (int coreId = 0; coreId < NUM_CORES; coreId++) {
+      if (runningProcesses[coreId] != null) {
+        executeInstruction(coreId);
+      }
+    }
+  }
+
   /**
    * Executes the next instruction for a specific core.
    *
@@ -87,26 +84,203 @@ public class CPU {
    */
   public void executeInstruction(int coreId) throws Exception {
     Process process = runningProcesses[coreId];
+    if (process == null)
+      return;
 
     String instruction = getNextInstruction(coreId);
     instructionRegisters[coreId] = instruction;
     if (instruction == null) {
-      process.updateState(ProcessState.TERMINATED);
       dispatcher(coreId);
       return;
     }
 
     String[] parts = instruction.split(" ");
+
     InstructionType type = InstructionType.valueOf(parts[0]);
+    if (!instructionHandlers.containsKey(type)) {
+      String message = "Instruction type not recognized: " + type;
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
     instructionHandlers.get(type).accept(coreId, parts);
-    process.getPCB().incrementProgramCounter();
-    process.getPCB().getStartTime();
-    process.getPCB().setlastStateChangeTime();
-    process.getPCB().updateCpuTimeUsed();
+
+    ProcessControlBlock pcb = process.getPCB();
+    pcb.incrementProgramCounter();
+    if (pcb.getStartTime() == null) {
+      pcb.setStartTime(Instant.now());
+    }
+    pcb.setlastStateChangeTime();
+    pcb.updateCpuTimeUsed();
+    pcb.setCpuId(this.cpuId);
 
     memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
     saveProcessContext(coreId);
   }
+
+  private String getNextInstruction(int coreId) {
+    Process CurrentProcess = runningProcesses[coreId];
+    String id = "P" + CurrentProcess.getProcessId();
+    String res = memory.getInstruction(id, CurrentProcess.getCurrentInstructionIndex());
+    CurrentProcess.setCurrentInstructionIndex(CurrentProcess.getCurrentInstructionIndex() + 1);
+    return res;
+  }
+
+  public void loadProcessContext(int coreId) {
+    Process process = runningProcesses[coreId];
+    for (Register reg : Register.values()) {
+      registers[coreId].put(reg, process.getPCB().getRegister(reg));
+    }
+  }
+
+  public void saveProcessContext(int coreId) {
+    Process process = runningProcesses[coreId];
+
+    for (Register reg : Register.values()) {
+      process.getPCB().setRegister(reg, registers[coreId].get(reg));
+    }
+  }
+
+  /**
+   * Terminates the process running on the specified core.
+   * 
+   * @param index the index of the core
+   */
+  public void dispatcher(int index) {
+    if (index >= 0 && index < NUM_CORES) {
+      Process currentProcess = runningProcesses[index];
+
+      currentProcess.getPCB().updateState(ProcessState.TERMINATED);
+      updateProcessBCP(currentProcess);
+
+      String id = "P" + currentProcess.getProcessId();
+
+      // Error handling for deallocation of memory
+      if (!memory.deallocateMemory(id)) {
+        sendInterruptMessage(index, InterruptCode._10H,
+            "Error deallocating memory for process " + id, currentProcess.getProcessId());
+      }
+      if (!memory.deallocateStack(id)) {
+        sendInterruptMessage(index, InterruptCode._10H,
+            "Error deallocating stack for process " + id, currentProcess.getProcessId());
+      }
+      if (!memory.freeBCPFromOS(id)) {
+        sendInterruptMessage(index, InterruptCode._10H,
+            "Error freeing BCP from OS for process " + id, currentProcess.getProcessId());
+      }
+
+      // Save the stats for the process
+      // sendInterruptMessage(index, InterruptCode._10H, getStats(index),
+      // currentProcess.getProcessId());
+
+      JsonObject stats = getStats(index);
+      scheduler.updateProcessStats(this.cpuId, id, stats);
+
+      runningProcesses[index] = null;
+      resetRegister(index);
+    } else {
+      String message = "Index out of bounds: " + index;
+      System.out.println(">> [Error / Not recognized core] " + message);
+    }
+  }
+
+  public JsonObject getStats(int index) {
+    Process currentProcess = runningProcesses[index];
+    if (currentProcess == null)
+      return new JsonObject();
+
+    JsonObject stats = new JsonObject();
+    stats.addProperty("cpuId", this.cpuId);
+    stats.addProperty("coreId", index);
+    stats.addProperty("processId", currentProcess.getProcessId());
+
+    Instant start = currentProcess.getPCB().getStartTime();
+    Instant nowUtc = Instant.now();
+
+    LocalDateTime localDateTime = LocalDateTime.ofInstant(start, ZoneId.systemDefault());
+    LocalDateTime localDateTimeN = LocalDateTime.ofInstant(nowUtc, ZoneId.systemDefault());
+
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:SSS");
+    stats.addProperty("startTime", localDateTime.format(formatter));
+    stats.addProperty("finishTime", localDateTimeN.format(formatter));
+
+    long diffInMillis = Duration.between(start, nowUtc).toMillis();
+    stats.addProperty("totalCoreUsageTime", String.format("%d.%d", diffInMillis / 1000, diffInMillis % 1000));
+
+    return stats;
+  }
+
+  /**
+   * Updates the BCP of the process in memory. With whatever changes were made.
+   * 
+   * @param process the process to update
+   */
+  private void updateProcessBCP(Process process) {
+    memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
+  }
+
+  /**
+   * Updates the flags based on the result of an operation.
+   * 
+   * @param result the result of the operation
+   */
+  private void updateFlags(int result) {
+    zeroFlag = result == 0;
+    // signFlag = result < 0;
+  }
+
+  public boolean isCoreAvailable(int coreId) {
+    return runningProcesses[coreId] == null;
+  }
+
+  public int getNumCores() {
+    return NUM_CORES;
+  }
+
+  public Process getRunningProcess(int coreId) {
+    return runningProcesses[coreId];
+  }
+
+  public String getRegisters(int coreId) {
+    StringBuilder sb = new StringBuilder();
+    for (Register reg : Register.values()) {
+      sb.append(reg).append(": ").append(registers[coreId].get(reg)).append("\n");
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Terminates all processes and resets the CPU state with the memory.
+   */
+  public void fullReset() {
+    // Reset all cores, processes, and registers
+    for (int i = 0; i < NUM_CORES; i++) {
+      runningProcesses[i] = null;
+      resetRegister(i);
+    }
+
+    // Reset flags
+    zeroFlag = false;
+    // signFlag = false;
+    // carryFlag = false;
+    // overflowFlag = false;
+
+    // Reset interrupt queue
+    InterruptQueue.clear();
+
+    // Reset user input handler
+    UserInputHandler.reset();
+
+    // Reset process stats
+    this.statsForProcesses.clear();
+  }
+
+  public int getCpuId() {
+    return cpuId;
+  }
+
+  // -------------------------------------------------------------
+  // All instruction handlers are defined below this comment block
+  // -------------------------------------------------------------
 
   private final Map<InstructionType, BiConsumer<Integer, String[]>> instructionHandlers = new HashMap<>();
 
@@ -725,15 +899,6 @@ public class CPU {
   }
 
   /**
-   * Updates the BCP of the process in memory. With whatever changes were made.
-   * 
-   * @param process the process to update
-   */
-  private void updateProcessBCP(Process process) {
-    memory.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-  }
-
-  /**
    * Check if a file name is already opened by another process.
    * 
    * @param fileName  the name of the file
@@ -753,189 +918,19 @@ public class CPU {
   }
 
   /**
-   * Updates the flags based on the result of an operation.
-   * 
-   * @param result the result of the operation
-   */
-  private void updateFlags(int result) {
-    zeroFlag = result == 0;
-    // signFlag = result < 0;
-  }
-
-  /**
-   * Checks if a core is available.
-   * 
-   * @param coreId the ID of the core
-   * @return true if the core is available, false otherwise. A core is available
-   *         if it is not running a process.
-   */
-  public boolean isCoreAvailable(int coreId) {
-    return runningProcesses[coreId] == null;
-  }
-
-  public int getNumCores() {
-    return NUM_CORES;
-  }
-
-  public void loadProcessContext(int coreId) {
-    Process process = runningProcesses[coreId];
-    for (Register reg : Register.values()) {
-      registers[coreId].put(reg, process.getPCB().getRegister(reg));
-    }
-  }
-
-  public void saveProcessContext(int coreId) {
-    Process process = runningProcesses[coreId];
-
-    // if (process == null)
-    //   return;
-    // if (process.getPCB() == null)
-    //   return;
-
-    // if (process.getPCB().getState() == ProcessState.TERMINATED) {
-    //   // dispatcher(coreId);
-    //   return;
-    // }
-
-    for (Register reg : Register.values()) {
-      process.getPCB().setRegister(reg, registers[coreId].get(reg));
-    }
-  }
-
-  public Process getRunningProcess(int coreId) {
-    return runningProcesses[coreId];
-  }
-
-  public int getCoreRegister(int coreId, Register reg) {
-    return registers[coreId].get(reg);
-  }
-
-  public String getRegisters(int coreId) {
-    StringBuilder sb = new StringBuilder();
-    for (Register reg : Register.values()) {
-      sb.append(reg).append(": ").append(registers[coreId].get(reg)).append("\n");
-    }
-    return sb.toString();
-  }
-
-  public String getStats(int index) {
-    Process currentProcess = runningProcesses[index];
-    if (currentProcess == null)
-      return "";
-    String prefixMsg = "[ Core " + index + " ] >> ";
-
-    Instant start = currentProcess.getPCB().getStartTime();
-    LocalDateTime localDateTime = LocalDateTime.ofInstant(start, ZoneId.of("UTC"));
-    LocalDateTime adjustedTime = localDateTime.minusHours(6);
-    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:SSS");
-    String formattedTime = adjustedTime.format(formatter);
-
-    Instant nowUtc = Instant.now();
-    LocalDateTime localDateTimeN = LocalDateTime.ofInstant(nowUtc, ZoneId.of("UTC"));
-    LocalDateTime adjustedTimeN = localDateTimeN.minusHours(6);
-    String formattedTimeN = adjustedTimeN.format(formatter);
-
-    long diffInMillis = Duration.between(adjustedTime, adjustedTimeN).toMillis();
-    String totalTime = String.format("%d.%d  segundos", diffInMillis / 1000, diffInMillis % 1000);
-
-    String message = 
-      prefixMsg + "Info:   \nStart time: " + formattedTime + 
-      "\nFinish time: " + formattedTimeN + 
-      "\nTotal core usage time: " + totalTime +
-      "\nProcess ID: " + currentProcess.getProcessId();
-    return message;
-  }
-
-  public String getCoreStatus(int id) {
-    return getStats(id);
-  }
-
-  /**
-   * Terminates the process running on the specified core.
-   * 
+   * Resets the registers for a specific core.
+   *
    * @param index the index of the core
    */
-  public void dispatcher(int index) {
-    if (index >= 0 && index < NUM_CORES) {
-      Process currentProcess = runningProcesses[index];
-      currentProcess.getPCB().updateState(ProcessState.TERMINATED);
-      memory.updateBCP("P" + currentProcess.getProcessId(), currentProcess.getPCB().toJsonString());
-      String id = "P" + currentProcess.getProcessId();
-      if (!memory.deallocateMemory(id)) {
-        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
-            "Error deallocating memory for process " + id, currentProcess.getProcessId()));
-      }
-      if (!memory.deallocateStack(id)) {
-        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
-            "Error deallocating stack for process " + id, currentProcess.getProcessId()));
-      }
-      if (!memory.freeBCPFromOS(id)) {
-        InterruptQueue.addMessage(new InterruptMessage(index, InterruptCode._10H,
-            "Error freeing BCP from OS for process " + id, currentProcess.getProcessId()));
-      }
-
-      InterruptQueue
-          .addMessage(new InterruptMessage(index, InterruptCode._10H, getStats(index), currentProcess.getProcessId()));
-
-      this.statsForProcesses.put("P" + currentProcess.getProcessId(), getStats(index));
-
-      runningProcesses[index] = null;
-      resetRegister(index);
-    } else {
-      String message = ("Index out of bounds: " + index);
-      InterruptQueue
-          .addMessage(new InterruptMessage(index, InterruptCode._10H, message, runningProcesses[0].getProcessId()));
+  private void resetRegister(int index) {
+    registers[index] = new EnumMap<>(Register.class);
+    for (Register reg : Register.values()) {
+      registers[index].put(reg, 0);
     }
-  }
-
-  /**
-   * Terminates all processes and resets the CPU state with the memory.
-   */
-  public void fullReset() {
-    // Reset all cores, processes, and registers
-    for (int i = 0; i < NUM_CORES; i++) {
-      runningProcesses[i] = null;
-      resetRegister(i);
-    }
-
-    // Reset flags
-    zeroFlag = false;
-    // signFlag = false;
-    // carryFlag = false;
-    // overflowFlag = false;
-
-    // Reset memory
-    int mainMemorySize = memory.getMainMemorySize();
-    int secondaryMemorySize = memory.getSecondaryMemorySize();
-    int kernelSize = memory.getKernelSize();
-    int osSize = memory.getOsSize();
-
-    this.memory = new MemoryManager(
-        mainMemorySize,
-        secondaryMemorySize,
-        kernelSize,
-        osSize);
-
-    // Reset interrupt queue
-    InterruptQueue.clear();
-
-    // Reset user input handler
-    UserInputHandler.reset();
-
-    // Reset process stats
-    this.statsForProcesses.clear();
   }
 
   private boolean isNumeric(String str) {
     return str.matches("-?\\d+(\\.\\d+)?");
-  }
-
-  private String getNextInstruction(int coreId) {
-    Process CurrentProcess = runningProcesses[coreId];
-    String id = "P" + CurrentProcess.getProcessId();
-    String res = memory.getInstruction(id, CurrentProcess.getCurrentInstructionIndex());
-    CurrentProcess.setCurrentInstructionIndex(CurrentProcess.getCurrentInstructionIndex() + 1);
-    return res;
   }
 
   private enum InstructionType {

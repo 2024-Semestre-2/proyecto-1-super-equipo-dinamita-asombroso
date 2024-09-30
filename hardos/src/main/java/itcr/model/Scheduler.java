@@ -1,70 +1,60 @@
 package itcr.model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
-/**
- * Scheduler class manages the scheduling of processes, including ready and
- * waiting queues, and interaction with the CPU and MemoryManager.
- */
+import com.google.gson.JsonObject;
+
 public class Scheduler {
   private Queue<Integer> readyQueue;
   private Queue<Integer> waitingQueue;
-  public CPU cpu;
-  private MemoryManager memoryManager;
+  private List<CPU> cpus;
+  public MemoryManager memoryManager;
+  private Map<Integer, Map<String, JsonObject>> cpuStats;
+  private int numCPUs = 1;
 
   /**
-   * Constructor for Scheduler.
+   * Constructor for Scheduler with multiple CPUs.
    *
-   * @param cpu           the CPU instance
+   * @param numCPUs       the number of CPUs to use
    * @param memoryManager the MemoryManager instance
    */
-  public Scheduler(CPU cpu, MemoryManager memoryManager) {
+  public Scheduler(int numCPUs, MemoryManager memoryManager) {
     this.readyQueue = new LinkedList<>();
     this.waitingQueue = new LinkedList<>();
-    this.cpu = cpu;
+    this.cpus = new ArrayList<>(numCPUs);
     this.memoryManager = memoryManager;
-    this.cpu.memory = memoryManager;
+    this.cpuStats = new HashMap<>();
+    this.numCPUs = numCPUs;
+    for (int i = 0; i < numCPUs; i++) {
+      CPU cpu = new CPU(i, this, memoryManager);
+      this.cpus.add(cpu);
+      this.cpuStats.put(i, new HashMap<>());
+    }
   }
 
-  /**
-   * Gets the registers of a specific core.
-   *
-   * @param coreId the ID of the core
-   * @return a string representation of the registers
-   */
-  public String getRegisters(int coreId) {
-    return cpu.getRegisters(coreId);
+  public void changeNumberCPUs(int numCPUs) {
+    this.numCPUs = numCPUs;
+    if (numCPUs < cpus.size()) {
+      for (int i = cpus.size() - 1; i >= numCPUs; i--) {
+        cpus.remove(i);
+        cpuStats.remove(i);
+      }
+    } else if (numCPUs > cpus.size()) {
+      for (int i = cpus.size(); i < numCPUs; i++) {
+        CPU cpu = new CPU(i, this, memoryManager);
+        cpus.add(cpu);
+        cpuStats.put(i, new HashMap<>());
+      }
+    }
   }
 
-  /**
-   * Gets the registers of a specific process running on a core.
-   *
-   * @param index  the index of the register
-   * @param coreId the ID of the core
-   * @return a string representation of the registers
-   */
-  public String getRegisters(int index, int coreId) {
-    itcr.model.Process process = cpu.getRunningProcess(coreId);
-    if (process == null) {
-      return "";
-    }
-    if (process.getPCB() == null) {
-      return "";
-    }
-
-    int address = process.getPCB().getStackPointer();
-    int currentInstrIndex = cpu.getRunningProcess(coreId).getCurrentInstructionIndex() - 1;
-
-    int pcReg = memoryManager.getAddressFromInstruction("P" + process.getProcessId(), currentInstrIndex + 1);
-    int irReg = memoryManager.getAddressFromInstruction("P" + process.getProcessId(), currentInstrIndex);
-
-    process.getPCB().setProgramCounter(pcReg);
-    memoryManager.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
-
-    return "PC: " + pcReg + "\nStackPointer: " + address + "\nIR: " + irReg;
+  public int getNumCPUs() {
+    return numCPUs;
   }
 
   /**
@@ -77,142 +67,199 @@ public class Scheduler {
     readyQueue.offer(processId);
     ProcessControlBlock pcb = process.getPCB();
     pcb.setState(ProcessState.READY);
-    // memoryManager.storeBCP("P" + processId, pcb.toJsonString()); // 0
+    memoryManager.updateBCP("P" + processId, pcb.toJsonString());
   }
 
   /**
    * Schedules the next process to run on available cores.
    */
   public void scheduleNextProcess() {
-    for (int i = 0; i < cpu.getNumCores(); i++) {
-      if (cpu.isCoreAvailable(i) && !readyQueue.isEmpty()) {
-        int nextProcessId = readyQueue.poll();
-        String bcpJson = memoryManager.getBCP("P" + nextProcessId);
-        ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
-        pcb.setState(ProcessState.RUNNING);
-        memoryManager.updateBCP("P" + nextProcessId, pcb.toJsonString()); // 1
+    for (CPU cpu : cpus) {
+      for (int coreId = 0; coreId < cpu.getNumCores(); coreId++) {
+        if (cpu.isCoreAvailable(coreId) && !readyQueue.isEmpty()) {
+          int nextProcessId = readyQueue.poll();
+          String bcpJson = memoryManager.getBCP("P" + nextProcessId);
+          ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+          pcb.setState(ProcessState.RUNNING);
+          pcb.setCpuId(cpu.getCpuId());
+          memoryManager.updateBCP("P" + nextProcessId, pcb.toJsonString());
 
-        Process nextProcess = new itcr.model.Process(pcb);
-        nextProcess.setQtyInstructions(memoryManager.getQtyInstructions("P" + nextProcessId));
-        cpu.assignProcessToCore(nextProcess, i);
+          Process nextProcess = new Process(pcb);
+          nextProcess.setQtyInstructions(memoryManager.getQtyInstructions("P" + nextProcessId));
+          cpu.assignProcessToCore(nextProcess, coreId);
+
+          // Set the next process reference
+          if (!readyQueue.isEmpty()) {
+            int nextInQueueId = readyQueue.peek();
+            String nextBcpJson = memoryManager.getBCP("P" + nextInQueueId);
+            ProcessControlBlock nextPcb = ProcessControlBlock.fromJsonString(nextBcpJson);
+            pcb.setNextProcess(nextPcb);
+            memoryManager.updateBCP("P" + nextProcessId, pcb.toJsonString());
+          }
+        }
       }
     }
   }
 
   /**
-   * Executes the next instruction on the first core.
-   *
-   * @throws Exception if an error occurs during execution
-   */
-  public void executeNextInstruction() throws Exception {
-    cpu.executeInstruction(0);
-  }
-
-  /**
-   * Gets the status of a specific core.
-   *
-   * @param id the ID of the core
-   * @return a string representation of the core status
-   */
-  public String getCoreStatus(int id) {
-    return cpu.getCoreStatus(id);
-  }
-
-  /**
-   * Executes instructions on all cores.
+   * Executes instructions on all CPUs and cores.
    *
    * @throws Exception if an error occurs during execution
    */
   public void executeInstruction() throws Exception {
-    Thread[] threads = new Thread[cpu.getNumCores()];
-
-    for (int i = 0; i < cpu.getNumCores(); i++) {
-      final int coreId = i;
-      threads[i] = new Thread(() -> {
-        try {
-          Process process = cpu.getRunningProcess(coreId);
-          if (process != null) {
-            String bcpJson = memoryManager.getBCP("P" + process.getPCB().getProcessId());
-
-            ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
-            if (pcb != null) {
-              if (pcb.getState() == ProcessState.RUNNING) {
-                cpu.executeInstruction(coreId);
-                if (pcb.getState() != ProcessState.WAITING) {
-                  pcb.incrementProgramCounter();
-                }
-              }
-              if (pcb.getState() == ProcessState.TERMINATED) {
-                cpu.dispatcher(coreId);
-              }
-            }
-          }
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      });
-      threads[i].start();
+    for (CPU cpu : cpus) {
+      cpu.executeInstructionOnAllCores();
     }
 
-    // Wait for all threads to complete
-    for (Thread thread : threads) {
-      thread.join();
-    }
-
-    // checkWaitingProcesses();
+    checkWaitingProcesses();
     scheduleNextProcess();
   }
 
-  /**
-   * Gets the registers of all cores.
-   *
-   * @return a list of string representations of the registers for each core
-   */
-  public List<String> getCoreRegisters() {
-    List<String> registers = new ArrayList<>();
-    for (int i = 0; i < cpu.getNumCores(); i++) {
-      registers.add("Core " + i + ": " + cpu.getRegisters(i));
+  private void checkWaitingProcesses() {
+    List<Integer> readyProcessIds = new ArrayList<>();
+    for (Integer processId : waitingQueue) {
+      String bcpJson = memoryManager.getBCP("P" + processId);
+      ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+      if (pcb.isReadyToRun()) {
+        pcb.setState(ProcessState.READY);
+        memoryManager.updateBCP("P" + processId, pcb.toJsonString());
+        readyProcessIds.add(processId);
+      }
     }
-    return registers;
+    waitingQueue.removeAll(readyProcessIds);
+    readyQueue.addAll(readyProcessIds);
+  }
+
+  public Queue<Integer> getReadyQueue() {
+    return new LinkedList<>(readyQueue);
   }
 
   /**
-   * Gets the content of a file from the memory manager.
+   * Moves a process to the waiting queue.
    *
-   * @param filename the name of the file
-   * @return the content of the file
+   * @param processId the ID of the process to move
    */
-  public String getFileContent(String filename) {
-    return memoryManager.getFile(filename);
+  public void moveToWaiting(int processId) {
+    String bcpJson = memoryManager.getBCP("P" + processId);
+    ProcessControlBlock pcb = ProcessControlBlock.fromJsonString(bcpJson);
+    pcb.setState(ProcessState.WAITING);
+    memoryManager.updateBCP("P" + processId, pcb.toJsonString());
+    waitingQueue.offer(processId);
   }
 
+  // ----------------------------------------------
+  // Stats related methods
+  // ----------------------------------------------
+  public void updateProcessStats(int cpuId, String processId, JsonObject stats) {
+    cpuStats.computeIfAbsent(cpuId, k -> new HashMap<>()).put(processId, stats);
+  }
+
+  public Map<Integer, Map<String, JsonObject>> getAllCPUStats() {
+    return new HashMap<>(cpuStats);
+  }
+
+  public boolean hasProcessesToExecute() {
+    if (!readyQueue.isEmpty()) {
+      return true;
+    }
+
+    // Verify if there are processes running on any core
+    for (CPU cpu : cpus) {
+      for (int i = 0; i < cpu.getNumCores(); i++) {
+        if (cpu.getRunningProcess(i) != null) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // ----------------------------------------------
+  // Not that important for the project
+  // ----------------------------------------------
+
   /**
-   * Gets the memory manager.
+   * Gets the extra registers of a specific process running on a core of a
+   * specific CPU.
    *
-   * @return the memory manager
+   * @param cpuId  the ID of the CPU
+   * @param coreId the ID of the core
+   * @return a string representation of the extra registers
    */
-  public MemoryManager getMemoryManager() {
-    return memoryManager;
+  public String getExtraRegisters(int cpuId, int coreId) {
+    CPU cpu = cpus.get(cpuId);
+    Process process = cpu.getRunningProcess(coreId);
+    if (process == null || process.getPCB() == null) {
+      return "";
+    }
+
+    int address = process.getPCB().getStackPointer();
+    int currentInstrIndex = process.getCurrentInstructionIndex() - 1;
+
+    int pcReg = memoryManager.getAddressFromInstruction("P" + process.getProcessId(), currentInstrIndex + 1);
+    int irReg = memoryManager.getAddressFromInstruction("P" + process.getProcessId(), currentInstrIndex);
+
+    process.getPCB().setProgramCounter(pcReg);
+    memoryManager.updateBCP("P" + process.getProcessId(), process.getPCB().toJsonString());
+
+    return "PC: " + pcReg + "\nSP: " + address + "\nIR: " + irReg;
   }
 
   /**
-   * Resets the scheduler, clearing queues and resetting the CPU and memory
+   * Gets the registers of a specific core of a specific CPU.
+   *
+   * @param cpuId  the ID of the CPU
+   * @param coreId the ID of the core
+   * @return a string representation of the registers
+   */
+  public String getRegisters(int cpuId, int coreId) {
+    return cpus.get(cpuId).getRegisters(coreId);
+  }
+
+  /**
+   * Resets the scheduler, clearing queues and resetting all CPUs and memory
    * manager.
    */
   public void reset() {
     readyQueue.clear();
     waitingQueue.clear();
-    cpu.fullReset();
-
-    for (String filename : memoryManager.getFiles()) {
-      String fileContent = memoryManager.getFile(filename);
-      if (cpu.memory.storeFile(filename, fileContent)) {
-
-      } else {
-
-      }
+    for (CPU cpu : cpus) {
+      cpu.fullReset();
     }
 
-    this.memoryManager = cpu.memory;
+    // Reset memory
+    int mainMemorySize = memoryManager.getMainMemorySize();
+    int secondaryMemorySize = memoryManager.getSecondaryMemorySize();
+    int kernelSize = memoryManager.getKernelSize();
+    int osSize = memoryManager.getOsSize();
+
+    MemoryManager freshMemory = new MemoryManager(
+        mainMemorySize,
+        secondaryMemorySize,
+        kernelSize,
+        osSize);
+
+    // Copy files from old memory to new memory
+    for (String filename : memoryManager.getFiles()) {
+      String fileContent = memoryManager.getFile(filename);
+      if (!freshMemory.storeFile(filename, fileContent))
+        System.out.println("Error storing file: " + filename);
+    }
+
+    // Free up memory
+    this.memoryManager = freshMemory;
+    for (CPU cpu : cpus) {
+      cpu.memory = memoryManager;
+    }
   }
+
+  public int getTotalCores() {
+    int totalCores = 0;
+    for (CPU cpu : cpus) {
+      totalCores += cpu.getNumCores();
+    }
+    return totalCores;
+  }
+
 }

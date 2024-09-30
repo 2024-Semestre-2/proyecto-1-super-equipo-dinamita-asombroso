@@ -11,6 +11,7 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import javax.imageio.ImageIO;
 
@@ -161,7 +162,13 @@ public class FileExplorer extends FloatingWindow<FileExplorerController> {
    */
   private ImageIcon getScaledIcon(String path, int width, int height) {
     try {
-      BufferedImage img = ImageIO.read(new File(path));
+      InputStream is = getClass().getResourceAsStream("/" + path);
+      if (is == null) {
+        System.out.println("Recurso no encontrado: " + path);
+        return null;
+      }
+
+      BufferedImage img = ImageIO.read(is);
       Image scaledImage = img.getScaledInstance(width, height, Image.SCALE_SMOOTH);
       return new ImageIcon(scaledImage);
     } catch (IOException e) {

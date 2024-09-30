@@ -27,7 +27,7 @@ public class DesktopScreen extends JPanel {
     setPreferredSize(new Dimension(DESKTOP_WIDTH, DESKTOP_HEIGHT));
 
     // Set background image
-    ImageIcon backgroundIcon = new ImageIcon("xp_home_background.jpg");
+    ImageIcon backgroundIcon = new ImageIcon(getClass().getResource("/xp_home_background.jpg"));
     Image backgroundImg = backgroundIcon.getImage().getScaledInstance(DESKTOP_WIDTH, DESKTOP_HEIGHT,
         Image.SCALE_SMOOTH);
     JLabel backgroundLabel = new JLabel(new ImageIcon(backgroundImg));
@@ -35,10 +35,10 @@ public class DesktopScreen extends JPanel {
     add(backgroundLabel);
 
     // Add desktop icons
-    addDesktopIcon("My Computer", "xp_home_mypc_icon.png", 25, 25, backgroundLabel, "MyComputer");
-    addDesktopIcon("Recycle Bin", "xp_home_reciclebin_icon.png", 25, 125, backgroundLabel, "RecycleBin");
-    addDesktopIcon("File Explorer", "xp_home_fileexplorer_icon.png", 25, 225, backgroundLabel, "FileExplorer");
-    addDesktopIcon("Hard8086", "xp_home_hard8086.png", 25, 325, backgroundLabel, "Hard8086");
+    addDesktopIcon("My Computer", "/xp_home_mypc_icon.png", 25, 25, backgroundLabel, "MyComputer");
+    addDesktopIcon("Recycle Bin", "/xp_home_reciclebin_icon.png", 25, 125, backgroundLabel, "RecycleBin");
+    addDesktopIcon("File Explorer", "/xp_home_fileexplorer_icon.png", 25, 225, backgroundLabel, "FileExplorer");
+    addDesktopIcon("Hard8086", "/xp_home_hard8086.png", 25, 325, backgroundLabel, "Hard8086");
   }
 
   /**
@@ -54,7 +54,7 @@ public class DesktopScreen extends JPanel {
   private void addDesktopIcon(String name, String iconPath, int x, int y, JLabel backgroundLabel,
       String actionCommand) {
     // Load and scale icon image
-    ImageIcon iconImage = new ImageIcon(iconPath);
+    ImageIcon iconImage = new ImageIcon(getClass().getResource(iconPath));
     Image img = iconImage.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
     JLabel iconLabel = new JLabel(new ImageIcon(img));
 

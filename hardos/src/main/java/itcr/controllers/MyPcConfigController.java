@@ -119,13 +119,17 @@ public class MyPcConfigController {
    * @param virtualMemorySize the size of the virtual memory
    * @return an error message if the configuration is invalid, otherwise null
    */
-  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize) {
+  public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize, int virtualMemorySize, int numCPUs) {
     if (kernelSize < 0 || osSize < 0 || mainMemorySize < 0 || secondaryMemorySize < 0 || virtualMemorySize < 0) {
       return "Los tamaños no pueden ser negativos";
     }
 
     if (kernelSize + osSize + virtualMemorySize > mainMemorySize) {
       return "El tamaño del kernel, sistema operativo y memoria virtual no pueden ser mayor al tamaño de la memoria principal";
+    }
+
+    if (numCPUs < 1) {
+      return "Debe haber al menos un CPU";
     }
 
     return null;
@@ -144,5 +148,13 @@ public class MyPcConfigController {
     } catch (Exception e) {
       throw new RuntimeException("Error loading configuration: " + e.getMessage(), e);
     }
+  }
+
+  public int getNumCPUs() {
+    return this.desktopScreenControllerRef.getNumCpus();
+  }
+
+  public void setNumCpus(int numCPUs) {
+    this.desktopScreenControllerRef.setNumCpus(numCPUs);
   }
 }

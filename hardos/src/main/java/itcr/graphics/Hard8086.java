@@ -4,16 +4,16 @@ import itcr.controllers.DesktopScreenController;
 import itcr.model.*;
 
 import javax.swing.*;
+import javax.swing.border.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.awt.event.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
+
+import com.google.gson.JsonObject;
 
 /**
  * Hard8086 class represents a custom floating window that simulates the
@@ -27,11 +27,24 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   private JTree memoryMapTree;
   private ExecutorService interruptExecutor;
   private final int NUM_CORES = 5;
+  private int numCPUs = 1;
   private boolean firstStep = true;
   public DesktopScreenController desktopScreenControllerRef = null;
-  private ProcessTimelinePanel statsPanel;
+  private StatsTab statsPanel;
 
-  private JTabbedPane tabbedPane;
+  // styling
+  private static final Color BACKGROUND_COLOR = new Color(240, 240, 245);
+  private static final Color ACCENT_COLOR = new Color(70, 130, 180);
+  private static final Color TEXT_COLOR = new Color(50, 50, 50);
+  private static final Color BUTTON_COLOR = new Color(100, 149, 237);
+  private static final Color CONSOLE_BG_COLOR = new Color(25, 25, 25);
+  private static final Color CONSOLE_TEXT_COLOR = new Color(0, 255, 0);
+
+  private static final Font TITLE_FONT = new Font("Segoe UI", Font.BOLD, 16);
+  private static final Font LABEL_FONT = new Font("Segoe UI", Font.PLAIN, 14);
+  private static final Font BUTTON_FONT = new Font("Segoe UI", Font.BOLD, 14);
+  private static final Font CONSOLE_FONT = new Font("Consolas", Font.PLAIN, 14);
+  private static final Font REGISTER_FONT = new Font("Consolas", Font.PLAIN, 13);
 
   /**
    * Constructor for Hard8086.
@@ -43,6 +56,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   public Hard8086(JFrame parent, Scheduler scheduler) {
     super(parent, "Hard8086 Simulator", scheduler);
     setSize(950, 600);
+    this.numCPUs = scheduler.getNumCPUs();
 
     interruptExecutor = Executors.newSingleThreadExecutor();
     startInterruptHandler();
@@ -53,46 +67,63 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
    */
   @Override
   protected void initComponents() {
-    JTabbedPane tabbedPane = new JTabbedPane();
+    if (this.registersAreas == null) {
+      this.registersAreas = new HashMap<>();
+    }
 
-    // Main Tab
+    setBackground(BACKGROUND_COLOR);
+
+    JTabbedPane tabbedPane = new JTabbedPane();
+    tabbedPane.setFont(LABEL_FONT);
+    tabbedPane.setBackground(BACKGROUND_COLOR);
+
     JPanel mainPanel = createMainTab();
     tabbedPane.addTab("Main", mainPanel);
 
-    // Stats Tab
-    statsPanel = new ProcessTimelinePanel();
-    statsPanel.setVisible(true);
-    statsPanel.setPreferredSize(new Dimension(800, 500));
-    tabbedPane.addTab("Stats", new JScrollPane(statsPanel));
-
-    this.tabbedPane = tabbedPane;
+    StatsTab statsPanel = new StatsTab();
+    tabbedPane.addTab("Stats", statsPanel);
+    this.statsPanel = statsPanel;
 
     add(tabbedPane, BorderLayout.CENTER);
+    updateRegistersDisplay();
   }
 
-  /**
-   * Creates the main tab panel.
-   *
-   * @return the main tab panel
-   */
   private JPanel createMainTab() {
-    JPanel mainPanel = new JPanel(new BorderLayout());
+    JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+    mainPanel.setBackground(BACKGROUND_COLOR);
+    mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+    if (this.numCPUs < 1) {
+      if (controller.getNumCPUs() < 1) {
+        this.numCPUs = 1;
+      } else {
+        this.numCPUs = controller.getNumCPUs();
+      }
+    }
 
     // Left Panel (Registers and Console)
-    JPanel leftPanel = new JPanel(new BorderLayout());
+    JPanel leftPanel = new JPanel(new BorderLayout(10, 10));
+    leftPanel.setBackground(BACKGROUND_COLOR);
 
     // Registers Panel
-    JPanel registersPanel = new JPanel(new GridLayout(1, NUM_CORES));
-    registersAreas = new HashMap<>();
+    JPanel registersPanel = new JPanel(new GridLayout(numCPUs, NUM_CORES, 5, 5));
+    registersPanel.setBackground(BACKGROUND_COLOR);
 
-    for (int i = 0; i < NUM_CORES; i++) {
-      JTextArea registerArea = new JTextArea(10, 15);
-      registerArea.setEditable(false);
-      registerArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-      registersAreas.put(i, registerArea);
-      JScrollPane scrollPane = new JScrollPane(registerArea);
-      scrollPane.setBorder(BorderFactory.createTitledBorder("Core " + i + " Registers"));
-      registersPanel.add(scrollPane);
+    for (int cpu = 0; cpu < numCPUs; cpu++) {
+      for (int core = 0; core < NUM_CORES; core++) {
+        JTextArea registerArea = new JTextArea(10, 10);
+        registerArea.setEditable(false);
+        registerArea.setFont(REGISTER_FONT);
+        registerArea.setBackground(Color.WHITE);
+        registerArea.setForeground(TEXT_COLOR);
+
+        int key = cpu * NUM_CORES + core;
+        this.registersAreas.put(key, registerArea);
+
+        JScrollPane scrollPane = new JScrollPane(registerArea);
+        scrollPane.setBorder(createStyledBorder("CPU " + cpu + " Core " + core));
+        registersPanel.add(scrollPane);
+      }
     }
 
     leftPanel.add(registersPanel, BorderLayout.NORTH);
@@ -100,72 +131,145 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
     // Console Area
     consoleArea = new JTextArea(10, 50);
     consoleArea.setEditable(false);
-    consoleArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+    consoleArea.setFont(CONSOLE_FONT);
+    consoleArea.setBackground(CONSOLE_BG_COLOR);
+    consoleArea.setForeground(CONSOLE_TEXT_COLOR);
+    consoleArea.setCaretColor(CONSOLE_TEXT_COLOR);
     JScrollPane consoleScrollPane = new JScrollPane(consoleArea);
-    consoleScrollPane.setBorder(BorderFactory.createTitledBorder("Console"));
+    consoleScrollPane.setBorder(createStyledBorder("Console"));
     leftPanel.add(consoleScrollPane, BorderLayout.CENTER);
 
     // Right Panel (Memory Map)
     memoryMapTree = new JTree();
     memoryMapTree.setRootVisible(false);
+    memoryMapTree.setFont(LABEL_FONT);
+    memoryMapTree.setBackground(Color.WHITE);
     expandAllNodes(memoryMapTree, 0, -1);
     JScrollPane memoryMapScrollPane = new JScrollPane(memoryMapTree);
-    memoryMapScrollPane.setBorder(BorderFactory.createTitledBorder("Memory Map"));
+    memoryMapScrollPane.setBorder(createStyledBorder("Memory Map"));
 
     // Split Pane
     JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, memoryMapScrollPane);
     splitPane.setResizeWeight(0.6);
+    splitPane.setBackground(BACKGROUND_COLOR);
     mainPanel.add(splitPane, BorderLayout.CENTER);
 
     // Control Panel
-    JPanel controlPanel = new JPanel(new BorderLayout());
-    inputField = new JTextField(20);
-    controlPanel.add(inputField, BorderLayout.CENTER);
+    JPanel controlPanel = new JPanel(new BorderLayout(5, 5));
+    controlPanel.setBackground(BACKGROUND_COLOR);
 
     // Button Panel
-    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-    JButton executeButton = new JButton("Execute");
-    JButton stepButton = new JButton("Step");
-    JButton cleanButton = new JButton("Clean");
-    JButton loadFilesButton = new JButton("Load Files");
-    JButton updateMemoryMapButton = new JButton("Update Memory Map");
-
-    executeButton.addActionListener(this::executeAllInstructions);
-    stepButton.addActionListener(this::executeNextInstruction);
-    cleanButton.addActionListener(this::cleanConsole);
-    loadFilesButton.addActionListener(this::loadFiles);
-    updateMemoryMapButton.addActionListener(this::updateMemoryMap);
-
-    buttonPanel.add(executeButton);
-    buttonPanel.add(stepButton);
-    buttonPanel.add(cleanButton);
-    buttonPanel.add(loadFilesButton);
-    buttonPanel.add(updateMemoryMapButton);
+    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+    buttonPanel.setBackground(BACKGROUND_COLOR);
+    String[] buttonLabels = { "Execute", "Step", "Clean", "Load Files", "Update Memory Map" };
+    for (String label : buttonLabels) {
+      JButton button = createStyledButton(label);
+      buttonPanel.add(button);
+    }
 
     controlPanel.add(buttonPanel, BorderLayout.SOUTH);
-
     mainPanel.add(controlPanel, BorderLayout.SOUTH);
 
     updateRegistersDisplay();
-    updateMemoryMap(null);
+    updateMemoryMap();
 
     return mainPanel;
   }
 
+  private JButton createStyledButton(String text) {
+    JButton button = new JButton(text);
+    button.setFont(BUTTON_FONT);
+    button.setBackground(BUTTON_COLOR);
+    button.setForeground(Color.WHITE);
+    button.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+    button.setFocusPainted(false);
+    button.addActionListener(this::handleButtonAction);
+    button.addMouseListener(new MouseAdapter() {
+      @Override
+      public void mouseEntered(MouseEvent e) {
+        button.setBackground(BUTTON_COLOR.brighter());
+      }
+
+      @Override
+      public void mouseExited(MouseEvent e) {
+        button.setBackground(BUTTON_COLOR);
+      }
+    });
+    return button;
+  }
+
+  private Border createStyledBorder(String title) {
+    return BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(ACCENT_COLOR, 2),
+        BorderFactory.createTitledBorder(
+            BorderFactory.createEmptyBorder(5, 5, 5, 5),
+            title,
+            TitledBorder.LEFT,
+            TitledBorder.TOP,
+            TITLE_FONT,
+            ACCENT_COLOR));
+  }
+
+  /**
+   * Updates the display of registers.
+   */
+  private void updateRegistersDisplay() {
+
+    if (registersAreas.isEmpty()) {
+      return;
+    }
+
+    int totalCores = controller.getTotalCores();
+    for (int i = 0; i < totalCores; i++) {
+      int cpuId = i / NUM_CORES;
+      int coreId = i % NUM_CORES;
+
+      JTextArea area = registersAreas.get(i);
+      if (area != null) {
+        String registers = controller.getRegisters(cpuId, coreId);
+        String extraRegisters = controller.getExtraRegisters(cpuId, coreId);
+        area.setText(registers + "\n" + extraRegisters);
+      }
+    }
+  }
+
+  // Handle button actions
+  private void handleButtonAction(ActionEvent e) {
+    Object source = e.getSource();
+    if (source instanceof JButton) {
+      JButton button = (JButton) source;
+      switch (button.getText()) {
+        case "Execute":
+          executeAllInstructions();
+          break;
+        case "Step":
+          executeNextInstruction();
+          break;
+        case "Clean":
+          cleanConsole();
+          break;
+        case "Load Files":
+          loadFiles();
+          break;
+        case "Update Memory Map":
+          updateMemoryMap();
+          break;
+      }
+    }
+  }
+
   private void updateStatsTab() {
     SwingUtilities.invokeLater(() -> {
-      Map<String, String> currentStatsForProcesses = controller.cpu.statsForProcesses;
-      statsPanel.updateStats(currentStatsForProcesses);
+      Map<Integer, Map<String, JsonObject>> allStats = controller.getAllCPUStats();
+      statsPanel.updateStats(allStats);
     });
   }
 
   /**
    * Updates the memory map displayed in the memory map tree.
-   *
-   * @param e the action event
    */
-  private void updateMemoryMap(ActionEvent e) {
-    MemoryMap memoryMap = controller.getMemoryManager().getMainMemoryMap();
+  private void updateMemoryMap() {
+    MemoryMap memoryMap = controller.memoryManager.getMainMemoryMap();
     DefaultMutableTreeNode root = new DefaultMutableTreeNode("Memory");
 
     addMemorySection(root, memoryMap.kernel);
@@ -231,18 +335,16 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
 
   /**
    * Loads files into the memory.
-   *
-   * @param e the action event
    */
-  private void loadFiles(ActionEvent e) {
+  private void loadFiles() {
     FileLoaderDialog dialog = new FileLoaderDialog((JFrame) SwingUtilities.getWindowAncestor(this), controller);
     dialog.setVisible(true);
-    List<String> selectedFiles = dialog.getSelectedFiles();
+    java.util.List<String> selectedFiles = dialog.getSelectedFiles();
 
     if (!selectedFiles.isEmpty()) {
       StringBuilder sb = new StringBuilder("Selected files:\n");
       for (String fileName : selectedFiles) {
-        String strInstructions = controller.getFileContent(fileName);
+        String strInstructions = controller.memoryManager.getFile(fileName);
         String assemblerErrors = Assembler.validateFormat(strInstructions);
         if (assemblerErrors != null) {
           JOptionPane.showMessageDialog(this, assemblerErrors, "Error " + fileName, JOptionPane.ERROR_MESSAGE);
@@ -252,7 +354,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
         String[] instructions = strInstructions.split("\n");
         itcr.model.Process process = createProcess(instructions);
         for (String instruction : instructions) {
-          controller.getMemoryManager().storeInstruction("P" + process.getProcessId(), instruction);
+          controller.memoryManager.storeInstruction("P" + process.getProcessId(), instruction);
         }
         controller.addProcess(process);
         sb.append(fileName).append("\n");
@@ -277,26 +379,26 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
 
     String processId = "P" + itcr.model.Process.processCounter;
 
-    int baseAddress = this.controller.getMemoryManager().allocateMemory(processId, processSize);
+    int baseAddress = this.controller.memoryManager.allocateMemory(processId, processSize);
 
     for (int i = 0; i < instructions.length; i++) {
       if (instructions[i].substring(0, 2).equals("//")) {
         continue;
       }
 
-      controller.getMemoryManager().storeInstruction(processId, instructions[i].split("//")[0]);
+      controller.memoryManager.storeInstruction(processId, instructions[i].split("//")[0]);
     }
 
-    int qtyInstructions = controller.getMemoryManager().getQtyInstructions(processId);
+    int qtyInstructions = controller.memoryManager.getQtyInstructions(processId);
     itcr.model.Process process = new itcr.model.Process(qtyInstructions);
 
     ProcessControlBlock pcb = new ProcessControlBlock(itcr.model.Process.processCounter++, baseAddress, processSize, 1);
-    if (!controller.getMemoryManager().storeBCP(processId, pcb.toJsonString())) {
-      System.out.println("Error storing BCP");
+    if (!controller.memoryManager.storeBCP(processId, pcb.toJsonString())) {
+      consoleArea.append("Error storing BCP for process " + processId + "\n");
     }
     process.setPCB(pcb);
-    if (!controller.getMemoryManager().allocateStack(processId)) {
-      System.out.println("xx >>> Error allocating stack");
+    if (!controller.memoryManager.allocateStack(processId)) {
+      consoleArea.append("Error allocating stack for process " + processId + "\n");
     }
 
     return process;
@@ -346,15 +448,13 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
    *
    * @param e the action event
    */
-  private void executeAllInstructions(ActionEvent e) {
+  private void executeAllInstructions() {
     new SwingWorker<Void, Void>() {
       @Override
       protected Void doInBackground() throws Exception {
-        int count = 10;
-        while (count != 0 && !isCancelled()) {
+        while (controller.hasProcessesToExecute() && !isCancelled()) {
           executeNextInstructionInBackground();
           Thread.sleep(1000);
-          count--;
         }
         return null;
       }
@@ -362,9 +462,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
       @Override
       protected void done() {
         SwingUtilities.invokeLater(() -> {
-          consoleArea.append("All instructions executed==\n");
+          consoleArea.append("All instructions executed\n");
           updateRegistersDisplay();
-          updateMemoryMap(e);
+          updateMemoryMap();
         });
       }
     }.execute();
@@ -394,16 +494,14 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
    */
   private void updateGUI() {
     updateRegistersDisplay();
-    updateMemoryMap(null);
+    updateMemoryMap();
     updateStatsTab();
   }
 
   /**
    * Executes the next instruction.
-   *
-   * @param e the action event
    */
-  private synchronized void executeNextInstruction(ActionEvent e) {
+  private synchronized void executeNextInstruction() {
     try {
       if (true) {
         if (firstStep) {
@@ -412,7 +510,7 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
         }
         controller.executeInstruction();
         updateRegistersDisplay();
-        updateMemoryMap(e);
+        updateMemoryMap();
         updateStatsTab();
       }
     } catch (Exception ex) {
@@ -424,20 +522,9 @@ public class Hard8086 extends FloatingWindow<Scheduler> {
   /**
    * Cleans the console area.
    *
-   * @param e the action event
    */
-  private void cleanConsole(ActionEvent e) {
+  private void cleanConsole() {
     consoleArea.setText("");
-  }
-
-  /**
-   * Updates the display of registers.
-   */
-  private void updateRegistersDisplay() {
-    for (int i = 0; i < NUM_CORES; i++) {
-      JTextArea area = registersAreas.get(i);
-      area.setText(controller.getRegisters(i) + "\n" + controller.getRegisters(0, i));
-    }
   }
 
   /**

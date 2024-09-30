@@ -39,6 +39,7 @@ public class ProcessControlBlock {
   private int turnaroundTime;
   private Instant lastStateChangeTime;
   private int stackPointer = -1; // -1 means stack is empty
+  private int cpuId = -1; // -1 means process is not running
 
   /**
    * Constructor for ProcessControlBlock.
@@ -81,6 +82,22 @@ public class ProcessControlBlock {
   }
 
   /**
+   * Creates a ProcessControlBlock from a JSON string.
+   *
+   * @param jsonString the JSON string
+   * @return the ProcessControlBlock object
+   */
+  public static ProcessControlBlock fromJsonString(String jsonString) {
+    JsonReader reader = new JsonReader(new StringReader(jsonString));
+    reader.setLenient(true);
+    return gson.fromJson(reader, ProcessControlBlock.class);
+  }
+
+  public boolean isReadyToRun() {
+    return state == ProcessState.READY;
+  }
+
+  /**
    * Sets the last state change time to the current time and updates the CPU time
    * used.
    */
@@ -95,18 +112,6 @@ public class ProcessControlBlock {
   public void updateCpuTimeUsed() {
     this.cpuTimeUsed = this.lastStateChangeTime.toEpochMilli() - this.startTime.toEpochMilli();
     this.cpuTimeUsed /= 1000;
-  }
-
-  /**
-   * Creates a ProcessControlBlock from a JSON string.
-   *
-   * @param jsonString the JSON string
-   * @return the ProcessControlBlock object
-   */
-  public static ProcessControlBlock fromJsonString(String jsonString) {
-    JsonReader reader = new JsonReader(new StringReader(jsonString));
-    reader.setLenient(true);
-    return gson.fromJson(reader, ProcessControlBlock.class);
   }
 
   /**
@@ -435,6 +440,24 @@ public class ProcessControlBlock {
    */
   public int getRegister(Register register) {
     return registers[register.ordinal()];
+  }
+
+  /**
+   * Gets the ID of the CPU running the process.
+   *
+   * @return the CPU ID
+   */
+  public int getCpuId() {
+    return cpuId;
+  }
+
+  /**
+   * Sets the ID of the CPU running the process.
+   *
+   * @param cpuId the CPU ID to set
+   */
+  public void setCpuId(int cpuId) {
+    this.cpuId = cpuId;
   }
 
   /**

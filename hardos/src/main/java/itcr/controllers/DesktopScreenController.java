@@ -19,6 +19,7 @@ public class DesktopScreenController {
   private final JFrame parent;
   private MemoryManager memoryManager;
   private Scheduler scheduler;
+  private int numCPUs = 1;
 
   /**
    * Constructs a DesktopScreenController with the specified parent JFrame.
@@ -27,9 +28,8 @@ public class DesktopScreenController {
    */
   public DesktopScreenController(JFrame parent) {
     this.parent = parent;
-    CPU cpu = new CPU();
     this.memoryManager = new MemoryManager();
-    this.scheduler = new Scheduler(cpu, memoryManager);
+    this.scheduler = new Scheduler(1, memoryManager);
     loadInitialFilesInMemory();
   }
 
@@ -148,6 +148,19 @@ public class DesktopScreenController {
             "JNE -3\n" +
             "MOV DX, AX\n" +
             "INT _10H\n" +
+            "INT _20H",
+        
+        // simples movs
+        "MOV AX, 5\n" +
+            "MOV BX, 10\n" +
+            "MOV CX, 15\n" +
+            "MOV DX, 20\n" +
+            "INC AX\n" +
+            "INC AX\n" +
+            "INC AX\n" +
+            "INC AX\n" +
+            "INC AX\n" +
+            "INC AX\n" +
             "INT _20H"
     };
 
@@ -194,7 +207,7 @@ public class DesktopScreenController {
    * Opens the Hard8086 emulator.
    */
   public void openHard8086() {
-    Hard8086 hard8086 = new Hard8086(parent, scheduler);
+    Hard8086 hard8086 = new Hard8086(parent, this.scheduler);
     hard8086.desktopScreenControllerRef = this;
     hard8086.setVisible(true);
   }
@@ -224,7 +237,7 @@ public class DesktopScreenController {
    * @return an error message if the configuration is invalid, otherwise null
    */
   public String validateConfiguration(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize,
-      int virtualMemorySize) {
+      int virtualMemorySize, int numCPUs) {
     if (kernelSize < 0 || osSize < 0 || mainMemorySize < 0 || secondaryMemorySize < 0 || virtualMemorySize < 0) {
       return "Los tamaños no pueden ser negativos";
     }
@@ -233,10 +246,23 @@ public class DesktopScreenController {
       return "El tamaño del kernel, sistema operativo y memoria virtual no pueden ser mayor al tamaño de la memoria principal";
     }
 
+    if (numCPUs < 1) {
+      return "Debe haber al menos un CPU";
+    }
+
     return null;
   }
 
   // Getters and setters
+
+  public int getNumCpus() {
+    return scheduler.getNumCPUs();
+  }
+
+  public void setNumCpus(int numCPUs) {
+    this.numCPUs = numCPUs;
+    scheduler.changeNumberCPUs(numCPUs);
+  }
 
   public int getKernelSize() {
     return memoryManager.getKernelSize();
@@ -280,7 +306,7 @@ public class DesktopScreenController {
 
   public void changeScheduler(Scheduler scheduler) {
     this.scheduler = scheduler;
-    this.memoryManager = scheduler.cpu.memory;
+    this.memoryManager = scheduler.memoryManager;
   }
 
   public void updateMemorySize(int kernelSize, int osSize, int mainMemorySize, int secondaryMemorySize,

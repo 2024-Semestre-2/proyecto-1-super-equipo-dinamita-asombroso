@@ -16,7 +16,7 @@ class LoginScreen extends JPanel {
 
     setLayout(new GridBagLayout());
     setPreferredSize(new Dimension(1024, 768));
-    backgroundLabel = new JLabel(new ImageIcon("xp_login_background.jpg"));
+    backgroundLabel = new JLabel(new ImageIcon(getClass().getResource("/xp_login_background.jpg")));
     backgroundLabel.setLayout(new GridBagLayout());
     add(backgroundLabel);
 
@@ -25,7 +25,7 @@ class LoginScreen extends JPanel {
     gbc.gridx = 0;
     gbc.gridy = 0;
 
-    ImageIcon profileIcon = new ImageIcon("xp_user_icon.jpg");
+    ImageIcon profileIcon = new ImageIcon(getClass().getResource("/xp_user_icon.jpg"));
     Image profileImg = profileIcon.getImage();
     Image scaledProfileImg = profileImg.getScaledInstance(128, 128, Image.SCALE_SMOOTH);
     JLabel userIcon = new JLabel(new ImageIcon(scaledProfileImg));
@@ -60,7 +60,7 @@ class LoginScreen extends JPanel {
     gbc.gridx = 1;
     backgroundLabel.add(passwordField, gbc);
 
-    ImageIcon buttonIcon = new ImageIcon("xp_login_button.png");
+    ImageIcon buttonIcon = new ImageIcon(getClass().getResource("/xp_login_button.png"));
     Image buttonImg = buttonIcon.getImage();
     Image scaledButtonImg = buttonImg.getScaledInstance(128, 128, Image.SCALE_SMOOTH);
     JButton loginButton = new JButton(new ImageIcon(scaledButtonImg));

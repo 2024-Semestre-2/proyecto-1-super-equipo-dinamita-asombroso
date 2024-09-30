@@ -18,6 +18,7 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
   private JTextField mainMemorySizeField;
   private JTextField secondaryMemorySizeField;
   private JTextField virtualMemorySizeField;
+  private JTextField numCPUsField;
   private JButton loadConfigButton;
 
   /**
@@ -59,6 +60,10 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     virtualMemorySizeField = new JTextField(String.valueOf(controller.getVirtualMemorySize()));
     mainPanel.add(virtualMemorySizeField);
 
+    mainPanel.add(new JLabel("Número de CPUs:"));
+    numCPUsField = new JTextField(String.valueOf(controller.getNumCPUs()));
+    mainPanel.add(numCPUsField);
+
     JButton saveButton = new JButton("Guardar");
     saveButton.addActionListener(e -> saveChanges());
     mainPanel.add(saveButton);
@@ -79,9 +84,10 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     int mainMemorySize = Integer.parseInt(mainMemorySizeField.getText());
     int secondaryMemorySize = Integer.parseInt(secondaryMemorySizeField.getText());
     int virtualMemorySize = Integer.parseInt(virtualMemorySizeField.getText());
+    int numCPUs = Integer.parseInt(numCPUsField.getText());
 
     String errorMsg = controller.validateConfiguration(kernelSize, osSize, mainMemorySize, secondaryMemorySize,
-        virtualMemorySize);
+        virtualMemorySize, numCPUs);
 
     if (errorMsg != null) {
       JOptionPane.showMessageDialog(this, errorMsg);
@@ -93,6 +99,7 @@ public class MyPcConfig extends FloatingWindow<MyPcConfigController> {
     controller.setMainMemorySize(mainMemorySize);
     controller.setSecondaryMemorySize(secondaryMemorySize);
     controller.setVirtualMemorySize(virtualMemorySize);
+    controller.setNumCpus(numCPUs);
 
     dispose();
   }

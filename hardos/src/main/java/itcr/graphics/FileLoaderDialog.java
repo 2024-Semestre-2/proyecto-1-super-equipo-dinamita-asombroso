@@ -47,7 +47,7 @@ public class FileLoaderDialog extends JDialog {
     fileListPanel.setLayout(new BoxLayout(fileListPanel, BoxLayout.Y_AXIS));
     JScrollPane fileListScrollPane = new JScrollPane(fileListPanel);
 
-    List<FileInfo> fileList = scheduler.getMemoryManager().getFileList();
+    List<FileInfo> fileList = scheduler.memoryManager.getFileList();
     for (FileInfo file : fileList) {
       JCheckBox checkBox = new JCheckBox(file.getFileName());
       checkBox.addActionListener(e -> updateSelectedFiles());
@@ -102,7 +102,7 @@ public class FileLoaderDialog extends JDialog {
    * @param fileName the name of the file to preview
    */
   private void showFilePreview(String fileName) {
-    String content = scheduler.getFileContent(fileName);
+    String content = scheduler.memoryManager.getFile(fileName);
     previewArea.setText(content);
   }
 

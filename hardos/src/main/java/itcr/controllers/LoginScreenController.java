@@ -27,7 +27,7 @@ public class LoginScreenController {
    * @param password the password entered by the user
    */
   public void attemptLogin(String username, String password) {
-    if ("admin".equals(username) && "".equals(password)) {
+    if ("admin".equals(username) && "admin".equals(password)) {
       SoundPlayer.playSound("Microsoft Windows XP Startup Sound.mp3");
       osSystem.showDesktopScreen();
     } else {

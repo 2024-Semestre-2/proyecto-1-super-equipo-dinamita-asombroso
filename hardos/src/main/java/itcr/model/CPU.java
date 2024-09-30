@@ -769,6 +769,13 @@ public class CPU {
    * @param prefixMsg the prefix message for the interrupt
    */
   private void deleteFile(int coreId, Process process, String fileName, String prefixMsg) {
+
+    if (memory.getFile(fileName) == null) {
+      String message = prefixMsg + "El archivo " + fileName + " no existe";
+      sendInterruptMessage(coreId, InterruptCode._10H, message, process.getProcessId());
+      return;
+    }
+
     process.getPCB().getOpenFiles().remove(fileName);
     updateProcessBCP(process);
     memory.freeFile(fileName);

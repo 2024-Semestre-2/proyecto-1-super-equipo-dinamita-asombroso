@@ -41,11 +41,13 @@ public class DesktopScreenController {
         "suma_numeros.asm",
         "contador_descendente.asm",
         "calculo_sumatoria.asm",
-        "manejo_archivos.asm",
+        "create-write-file.asm",
+        "delete-file.asm",
         "comparacion_numeros.asm",
         "entrada_salida.asm",
         "operaciones_pila.asm",
-        "saltos_condicionales.asm"
+        "saltos_condicionales.asm",
+        "simples_movs.asm",
     };
 
     String[] fileContent = {
@@ -86,18 +88,26 @@ public class DesktopScreenController {
             "INT _10H\n" + // imprimimos el resultado
             "INT _20H", // terminamos
 
-        // manejo_archivos.asm
+        // create-write-file.asm
         "// Crea, escribe, lee y elimina un archivo\n" +
-            "MOV AX, 0\n" +
-            "INT _08H\n" +
-            "INT _21H\n" +
-            "MOV AX, 3\n" +
+            "MOV AX, 0\n" + // crea archivo vacio
+            "INT _08H\n" + // pide un string
+            "INT _21H\n" + // crea archivo, ya que ax = 0
+            "MOV AX, 3\n" + // escribir un archivo, ax = 3
             "MOV CX, BX\n" +
             "INT _08H\n" +
+            "SWAP CX, BX\n" +
             "INT _21H\n" +
             "MOV AX, 2\n" +
             "INT _21H\n" +
+            // "MOV AX, 5\n" +
+            // "INT _21H\n" +
+            "INT _20H",
+
+        // delete-file.asm
+        "// Elimina un archivo\n" +
             "MOV AX, 5\n" +
+            "INT _08H\n" +
             "INT _21H\n" +
             "INT _20H",
 
